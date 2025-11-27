@@ -1,0 +1,206 @@
+/* ==========================================================
+   🌙 Kinber Global Styles (Final Unified Version)
+   Date: 2025-10-22
+   Purpose: Seamless dark-grey (#2a2a2a) background across
+            entire viewport — unified color for sidebar + chat
+   ========================================================== */
+
+@import 'tailwindcss';
+@plugin 'tailwind-scrollbar';
+@plugin 'tailwind-scrollbar-hide';
+
+/* ---------- Base Reset ---------- */
+html,
+body {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;       /* use % instead of vw to avoid overflow bug */
+  height: 100% !important;      /* ✅ allows nested scrolls to work */
+  min-height: 0 !important;     /* ✅ prevents flex children from freezing */
+  overflow-x: hidden !important; /* prevent horizontal scroll */
+  overflow-y: auto !important;   /* ✅ allow vertical scroll in children (like sidebar) */
+  font-family: var(--font-geist-sans, ui-sans-serif);
+  background-color: #2a2a2a !important; /* unified dark-grey background */
+  color: #e5e7eb !important;
+}
+
+/* ---------- Theme Variables ---------- */
+:root {
+  --background: #2a2a2a !important; /* ✅ Match dashboard color */
+  --foreground: #e5e7eb !important;
+  --accent: #3a3a3a !important;
+  --border: #3a3a3a !important;
+}
+
+.dark {
+  --background: #2a2a2a !important;
+  --foreground: #e5e7eb !important;
+}
+
+.light {
+  --background: #2a2a2a !important;
+  --foreground: #e5e7eb !important;
+}
+
+/* ---------- Scrollbar Styling ---------- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #444;
+  border-radius: 8px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #666;
+}
+
+/* ---------- Typography & Rendering ---------- */
+html {
+  scroll-behavior: smooth;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-feature-settings: 'palt';
+}
+
+/* ---------- Markdown / Chat Message Styling ---------- */
+.prose.chat-markdown {
+  color: var(--foreground);
+  line-height: 1.6;
+}
+
+.prose.chat-markdown h1,
+.prose.chat-markdown h2,
+.prose.chat-markdown h3 {
+  font-weight: 600;
+  margin-top: 0.8em;
+  margin-bottom: 0.4em;
+}
+
+.prose.chat-markdown code {
+  background-color: #1f1f1f;
+  color: #e5e7eb;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: var(--font-mono, ui-monospace);
+}
+
+.prose.chat-markdown pre {
+  background-color: #1f1f1f;
+  padding: 0.75em 1em;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.prose.chat-markdown ul,
+.prose.chat-markdown ol {
+  padding-left: 1.5em;
+}
+
+/* ---------- Utility Classes ---------- */
+.bg-pattern-grid {
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* =======================================================
+   🔧 Force uniform Kinber dashboard background color
+   ======================================================= */
+html,
+body,
+#__next,
+div[data-overlay-container],
+main,
+section,
+#dashboard-main,
+#dashboard-scroll-area,
+#chat-history,
+.flex.h-screen.w-screen.overflow-hidden {
+  background-color: #2a2a2a !important; /* ✅ Unified tone everywhere */
+  color: #e5e7eb !important;
+}
+
+/* Make sure all transparent child divs inherit the grey */
+* {
+  background-color: transparent;
+}
+
+/* =======================================================
+   🧩 Sidebar Scroll Fix Overrides
+   ======================================================= */
+
+html,
+body,
+#__next {
+  height: 100%;           /* not 100vh → allow nested flow */
+  min-height: 0;          /* let flex children shrink */
+  overflow-x: hidden;     /* keep X locked */
+  overflow-y: visible;    /* ✅ allow descendants to scroll */
+}
+
+div#__next {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+[data-radix-sheet-content],
+[data-sidebar] {
+  overflow: visible !important; /* unlock Radix / Sidebar wrappers */
+  min-height: 0 !important;
+}
+
+/* === KINBER SHIMMER EFFECT === */
+@keyframes shimmer {
+  0% {
+    background-position: -450px 0;
+  }
+  100% {
+    background-position: 450px 0;
+  }
+}
+
+.shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.shimmer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -150px;
+  width: 150px;
+  height: 100%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.06) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: shimmer 1.5s infinite linear;
+}
+
+/* === END SHIMMER === */
+
+/* =======================================================
+   ✅ End of Kinber Global Styles
+   ======================================================= */

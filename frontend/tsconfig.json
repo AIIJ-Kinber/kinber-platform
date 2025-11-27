@@ -1,0 +1,57 @@
+{
+  "compilerOptions": {
+    "target": "ES2017",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": true,
+    "incremental": true,
+    "module": "esnext",
+    "esModuleInterop": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "plugins": [{ "name": "next" }],
+    "strictNullChecks": true,
+
+    "baseUrl": "src",
+
+    "paths": {
+      "@/*": ["*"],
+
+      "@/app/*": ["app/*"],
+      "@/agents/*": ["agents/*"],
+      "@/components/*": ["_components/*"],
+
+      "@/hooks/*": ["hooks/*"],
+      "@/hooks/react-query/*": ["hooks/react-query/*"],
+
+      "@/lib/*": ["lib/*"],
+      "@/lib/actions/*": ["lib/actions/*"],
+      "@/lib/constants/*": ["lib/constants/*"],
+      "@/lib/utils/*": ["lib/utils/*"],
+      "@/lib/supabase/*": ["lib/supabase/*"],
+
+      "@/providers/*": ["providers/*"],
+      "@/contexts/*": ["contexts/*"],
+
+      "@/sidebar/*": ["_components/sidebar/*"],
+      "@/thread/*": ["_components/thread/*"],
+
+      "@/ui/*": ["_components/ui/*"],
+
+      "@/marketing/*": ["_marketing/components/*"]
+    }
+  },
+
+  "include": [
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "**/*.ts",
+    "**/*.tsx"
+  ],
+
+  "exclude": ["node_modules"]
+}
