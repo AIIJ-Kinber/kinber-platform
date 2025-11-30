@@ -49,6 +49,29 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
   }, [isOpen, supabase]);
 
   /* --------------------------------------------------------
+    Google OAuth: Login / Logout
+  -------------------------------------------------------- */
+  const handleGoogleLogin = async () => {
+    try {
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          scopes: 'https://www.googleapis.com/auth/drive.readonly',
+          queryParams: { access_type: 'offline', prompt: 'consent' },
+        },
+      });
+      // redirect happens automatically
+    } catch (err) {
+      console.error('Google OAuth error:', err);
+    }
+  };
+
+  const handleGoogleLogout = async () => {
+    await supabase.auth.signOut();
+    alert('Logged out from Google.');
+  };
+
+  /* --------------------------------------------------------
      Save profile
   -------------------------------------------------------- */
   const handleSave = async () => {
@@ -162,6 +185,8 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
                   service={service}
                   supabase={supabase}
                   isOpen={isOpen}
+                  onGoogleLogin={handleGoogleLogin}
+                  onGoogleLogout={handleGoogleLogout}
                 />
               ))}
             </div>
@@ -185,19 +210,24 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
 }
 
 /* --------------------------------------------------------
-   Child component — Hooks safe here
+   Child component — Handles each service row
 -------------------------------------------------------- */
 function CredentialsServiceRow({
   service,
   supabase,
   isOpen,
+  onGoogleLogin,
+  onGoogleLogout,
 }: {
   service: string;
   supabase: any;
   isOpen: boolean;
+  onGoogleLogin: () => void;
+  onGoogleLogout: () => void;
 }) {
   const [connected, setConnected] = useState(false);
 
+  /* Load connection state */
   useEffect(() => {
     if (!isOpen) return;
 
@@ -213,11 +243,26 @@ function CredentialsServiceRow({
         .single();
 
       setConnected(data?.status === 'connected');
+
+      // Google Drive auto-connect after OAuth redirect
+      if (service === 'Google Drive') {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData.session?.provider_token) {
+          setConnected(true);
+
+          await supabase.from('credentials').upsert({
+            user_id: auth.user.id,
+            service_name: 'Google Drive',
+            status: 'connected',
+          });
+        }
+      }
     };
 
     check();
   }, [isOpen, service, supabase]);
 
+  /* Default connect (GitHub, Supabase, etc.) */
   const connect = async () => {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) return alert('User not found');
@@ -232,13 +277,14 @@ function CredentialsServiceRow({
     setConnected(true);
   };
 
+  /* Default disconnect */
   const disconnect = async () => {
     const { data: auth } = await supabase.auth.getUser();
     if (!auth?.user) return alert('User not found');
 
     const { error } = await supabase
       .from('credentials')
-      .update({ status: 'disconnected' })
+      .delete()
       .eq('user_id', auth.user.id)
       .eq('service_name', service);
 
@@ -250,15 +296,42 @@ function CredentialsServiceRow({
     <div className="flex justify-between items-center bg-[#1f1f1f] border border-gray-700 rounded-md p-3 text-sm">
       <span>{service}</span>
 
-      {connected ? (
-        <button onClick={disconnect} className="text-red-400 hover:text-red-300">
-          Disconnect
-        </button>
+      {/* Special UI for Google Drive */}
+      {service === 'Google Drive' ? (
+        connected ? (
+          <button
+            onClick={onGoogleLogout}
+            className="text-red-400 hover:text-red-300"
+          >
+            Disconnect
+          </button>
+        ) : (
+          <button
+            onClick={onGoogleLogin}
+            className="text-blue-400 hover:text-blue-300"
+          >
+            Connect with Google
+          </button>
+        )
       ) : (
-        <button onClick={connect} className="text-blue-400 hover:text-blue-300">
-          Connect
-        </button>
+        // Default behavior for other services
+        connected ? (
+          <button
+            onClick={disconnect}
+            className="text-red-400 hover:text-red-300"
+          >
+            Disconnect
+          </button>
+        ) : (
+          <button
+            onClick={connect}
+            className="text-blue-400 hover:text-blue-300"
+          >
+            Connect
+          </button>
+        )
       )}
     </div>
   );
 }
+

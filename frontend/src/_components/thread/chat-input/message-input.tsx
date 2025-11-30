@@ -1,6 +1,7 @@
 'use client';
 
-import React, {
+import React,
+{
   forwardRef,
   useEffect,
   useState,
@@ -8,8 +9,10 @@ import React, {
   RefObject,
 } from 'react';
 import Image from 'next/image';
+import SelectIcon from '@/../public/select.png';
 import { Textarea } from '@/_components/ui/textarea';
 import { cn } from '@/lib/utils';
+import DatasetPreviewModal from "@/_components/modals/dataset-preview-modal";
 import { motion } from 'framer-motion';
 import { createClient } from '@/lib/supabase/client';
 import DriveIcon from '@/../public/drive.png';
@@ -31,7 +34,6 @@ import {
   Settings,
   Globe,
   Github,
-  Grid,
 } from 'lucide-react';
 
 const MotionButton = motion.button;
@@ -110,14 +112,81 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       };
     }, [ref]);
 
-    // Supabase client (using app wrapper)
+    // Supabase client
     const supabase = createClient();
 
-    // UI state
+    // Load Google Drive access token (first time only)
+    useEffect(() => {
+      const loadToken = async () => {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.provider_token || null;
+
+        if (token) {
+          console.log("🔐 Google Drive token loaded:", token);
+        }
+
+        setAccessToken(token);
+      };
+
+      loadToken();
+    }, []);
+
+    // Listen for Supabase session changes (Google OAuth redirect)
+    useEffect(() => {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
+        const token = session?.provider_token || null;
+
+        if (token) {
+          console.log("🔄 Google Drive token updated via session event:", token);
+          setAccessToken(token);
+        }
+      });
+
+      return () => subscription.unsubscribe();
+    }, []);
+
+    // ---------------------------------------------------------
+    // GOOGLE DRIVE TOKEN (Picker Authentication)
+    // ---------------------------------------------------------
+    const [accessToken, setAccessToken] = useState<string | null>(null);
+
+    useEffect(() => {
+      const loadToken = async () => {
+        const { data } = await supabase.auth.getSession();
+        const token = data.session?.provider_token || null;
+        setAccessToken(token);
+      };
+
+      loadToken();
+    }, []); // ← run once only
+
+    // ---------------------------------------------------------
+    // UI STATE
+    // ---------------------------------------------------------
     const [isPlusOpen, setIsPlusOpen] = useState(false);
     const [isToolsOpen, setIsToolsOpen] = useState(false);
-    const [isAdvisorOpen, setIsAdvisorOpen] = useState(false);
-    const [selectedAdvisor, setSelectedAdvisor] = useState('');
+    const [isAgentOpen, setIsAgentOpen] = useState(false);
+    const [SelectedAgent, setSelectedAgent] = useState('');
+
+    // CSV Preview UI State
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [previewFileName, setPreviewFileName] = useState<string | null>(null);
+    const [previewRows, setPreviewRows] = useState<string[][]>([]);
+
+    // Google Picker state
+    const [pickerLoaded, setPickerLoaded] = useState(false);
+    const [googleClientLoaded, setGoogleClientLoaded] = useState(false);
+
+    // Google OAuth client id (from env)
+    const GOOGLE_CLIENT_ID =
+      process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+
+    // Refs for popovers
+    const plusRef = useRef<HTMLDivElement>(null);
+    const toolsRef = useRef<HTMLDivElement>(null);
+    const agentRef = useRef<HTMLDivElement>(null);
 
     // Clear attachments when global event is dispatched
     useEffect(() => {
@@ -131,12 +200,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       };
     }, [onAttachmentsChange]);
 
-    // Refs for popovers
-    const plusRef = useRef<HTMLDivElement>(null);
-    const toolsRef = useRef<HTMLDivElement>(null);
-    const advisorRef = useRef<HTMLDivElement>(null);
-
-    // File → Base64
+    // File → Base64 (for local uploads)
     const fileToBase64 = (file: File): Promise<string> =>
       new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -145,7 +209,85 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
         reader.readAsDataURL(file);
       });
 
-    // Attach files (upload to Supabase + store base64 only; backend handles vision)
+    /* --------------------------------------------------------
+      Detect dataset type using MIME or extension
+    -------------------------------------------------------- */
+    const detectDatasetType = (file: Attachment): string | null => {
+      const name = file.name.toLowerCase();
+      const type = file.type?.toLowerCase() || "";
+
+      if (name.endsWith(".csv") || type.includes("text/csv")) return "csv";
+      if (name.endsWith(".tsv") || type.includes("text/tab-separated-values")) return "tsv";
+      if (
+        name.endsWith(".xlsx") ||
+        type.includes("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+      )
+        return "xlsx";
+      if (name.endsWith(".json") || type.includes("application/json")) return "json";
+      if (name.endsWith(".ndjson")) return "ndjson";
+      if (type.includes("google-apps.spreadsheet")) return "gsheet";
+      if (name.endsWith(".pdf") || type.includes("application/pdf")) return "pdf";
+
+      return null;
+    };
+
+    /* --------------------------------------------------------
+      CSV PREVIEW (Simple + clean)
+    -------------------------------------------------------- */
+    const previewCsv = async (fileName: string, base64: string) => {
+      try {
+        const csvText = atob(base64.split(",")[1]);
+
+        const rows = csvText
+          .split("\n")
+          .map((line) => line.split(",").map((c) => c.trim()));
+
+        setPreviewFileName(fileName);
+        setPreviewRows(rows);
+        setPreviewOpen(true);
+
+        console.log("CSV preview ready:", fileName);
+      } catch (err) {
+        console.error("CSV preview error:", err);
+      }
+    };
+
+    /* --------------------------------------------------------
+      Convert Google Sheets → CSV
+    -------------------------------------------------------- */
+    const downloadGoogleSheetAsCsv = async (
+      fileId: string,
+      accessToken: string
+    ): Promise<{ base64: string; size: number } | null> => {
+      try {
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/csv`,
+          {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          }
+        );
+
+        if (!res.ok) {
+          console.error("Sheet export error:", res.status);
+          return null;
+        }
+
+        const blob = await res.blob();
+
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+
+        return { base64, size: blob.size };
+      } catch (err) {
+        console.error("Sheet → CSV error:", err);
+        return null;
+      }
+    };
+
+    // Attach files (upload to Supabase + store base64; backend handles vision)
     const handleAttachFiles = async () => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -207,74 +349,41 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       input.click();
     };
 
-    // Tool actions (stubs for now)
-    const handleDriveImport = () => {
-      console.log('Drive Import clicked');
-    };
-
-    const handleDeepResearch = () => {
-      console.log('Deep Research clicked');
-    };
-
-    const handleWebSearch = () => {
-      console.log('Web Search clicked');
-    };
-
-    const handleGitHubImport = () => {
-      console.log('GitHub Import clicked');
-    };
-
-    const handleToolAction = (tool: 'attach' | 'drive' | 'research' | 'web' | 'github' | 'more') => {
-      switch (tool) {
+    // Handle tool actions from menus
+    const handleToolAction = (key: string) => {
+      switch (key) {
         case 'attach':
-          void handleAttachFiles();
+          handleAttachFiles();
+          setIsPlusOpen(false);
           break;
         case 'drive':
-          handleDriveImport();
-          break;
-        case 'research':
-          handleDeepResearch();
+          if (!accessToken) {
+            signInWithGoogle().then((token) => {
+              if (token) {
+                setAccessToken(token);
+                openGooglePicker(token);
+              }
+            });
+          } else {
+            openGooglePicker(accessToken);
+          }
+          setIsPlusOpen(false);
           break;
         case 'web':
-          handleWebSearch();
-          break;
         case 'github':
-          handleGitHubImport();
-          break;
         case 'more':
-        default:
-          console.log('Tool not implemented:', tool);
+          console.log('Feature not yet implemented:', key);
+          setIsPlusOpen(false);
+          break;
       }
-      setIsPlusOpen(false);
     };
 
-    // Close popovers when clicking outside
-    useEffect(() => {
-      const onDown = (e: MouseEvent) => {
-        const target = e.target as Node;
-        if (plusRef.current && !plusRef.current.contains(target)) {
-          setIsPlusOpen(false);
-        }
-        if (toolsRef.current && !toolsRef.current.contains(target)) {
-          setIsToolsOpen(false);
-        }
-        if (advisorRef.current && !advisorRef.current.contains(target)) {
-          setIsAdvisorOpen(false);
-        }
-      };
-
-      document.addEventListener('mousedown', onDown);
-      return () => {
-        document.removeEventListener('mousedown', onDown);
-      };
-    }, []);
-
-    // Submit on Enter
+    // Handle keyboard submit
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        if (inputValue.trim() && !loading && (!disabled || isAgentRunning)) {
-          const text = typeof inputValue === 'string' ? inputValue : '';
+        const text = typeof inputValue === 'string' ? inputValue : '';
+        if (text.trim()) {
           onSubmit(text, attachedFiles || []);
           setInputValue('');
           setAttachedFiles([]);
@@ -283,9 +392,249 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       }
     };
 
-    const isActive = inputValue.trim().length > 0 && !loading;
+    // Determine if submit button should be active
+    const isActive = inputValue.trim().length > 0 || attachedFiles.length > 0;
 
-    // Render
+    // Fetch file bytes from Google Drive using Drive API
+    const fetchDriveFile = async (fileId: string, accessToken: string) => {
+      try {
+        const res = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
+          }
+        );
+
+        if (!res.ok) {
+          console.error("Drive API error status:", res.status);
+          return null;
+        }
+
+        const blob = await res.blob();
+
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+
+        return { blob, base64 };
+      } catch (e) {
+        console.error("Drive download error:", e);
+        return null;
+      }
+    };
+
+    // Sign in with Google and get an access token for Drive
+    const signInWithGoogle = async (): Promise<string | null> => {
+      if (!googleClientLoaded) {
+        alert("Google client is still loading. Please wait a moment and try again.");
+        return null;
+      }
+
+      if (!GOOGLE_CLIENT_ID) {
+        console.error("Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID");
+        alert("Google client ID is not configured.");
+        return null;
+      }
+
+      const gapi = (window as any).gapi;
+
+      try {
+        let auth2 = gapi.auth2?.getAuthInstance?.();
+        if (!auth2) {
+          auth2 = await gapi.auth2.init({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: "https://www.googleapis.com/auth/drive.readonly",
+          });
+        }
+
+        const user = await auth2.signIn();
+        const token = user.getAuthResponse().access_token as string;
+        console.log("Google access token:", token);
+        return token;
+      } catch (err) {
+        console.error("Google sign-in error:", err);
+        alert("Google sign-in failed. Please try again.");
+        return null;
+      }
+    };
+
+    // ---------------------------------------------------------
+    // GOOGLE CLIENT + PICKER + AUTH INITIALIZATION
+    // ---------------------------------------------------------
+    useEffect(() => {
+      if ((window as any).__googleApiLoaded) return;
+      (window as any).__googleApiLoaded = true;
+
+      const script = document.createElement("script");
+      script.src = "https://apis.google.com/js/api.js";
+      script.async = true;
+
+      script.onload = () => {
+        console.log("📌 Google API script loaded");
+
+        // 1) Load gapi client and auth2
+        window.gapi.load("client:auth2", async () => {
+          try {
+            await window.gapi.client.init({
+              clientId: GOOGLE_CLIENT_ID,
+              scope: "https://www.googleapis.com/auth/drive.readonly",
+            });
+
+            await window.gapi.auth2.init({
+              client_id: GOOGLE_CLIENT_ID,
+              scope: "https://www.googleapis.com/auth/drive.readonly",
+            });
+
+            console.log("📌 Google Auth2 initialized");
+            setGoogleClientLoaded(true);
+          } catch (err) {
+            console.error("❌ Google Auth2 initialization failed:", err);
+          }
+        });
+
+        // 2) Load Picker API separately
+        window.gapi.load("picker", () => {
+          console.log("📌 Google Picker loaded");
+          setPickerLoaded(true);
+        });
+      };
+
+      document.body.appendChild(script);
+    }, [GOOGLE_CLIENT_ID]);
+
+    // ---------------------------------------------------------
+    // Create & open Google Drive Picker
+    // ---------------------------------------------------------
+    const openGooglePicker = (accessToken: string) => {
+      const google = (window as any).google;
+
+      if (!pickerLoaded || !google || !google.picker) {
+        alert("Google Picker is still loading. Try again in 1–2 seconds.");
+        return;
+      }
+
+      // Views: show Files + Folders + Upload
+      const viewDocs = new google.picker.DocsView(google.picker.ViewId.DOCS)
+        .setParent("root")
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(false)
+        .setMode(google.picker.DocsViewMode.LIST)
+        .setMimeTypes("*/*");
+
+      const viewDrive = new google.picker.DocsView(google.picker.ViewId.DRIVE)
+        .setParent("root")
+        .setIncludeFolders(true)
+        .setSelectFolderEnabled(false)
+        .setMode(google.picker.DocsViewMode.LIST)
+        .setMimeTypes("*/*");
+
+      const viewUpload = new google.picker.DocsUploadView();
+
+      const picker = new google.picker.PickerBuilder()
+        .enableFeature(google.picker.Feature.NAV_HIDDEN)
+        .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+        .setOAuthToken(accessToken)
+        .addView(viewDocs)
+        .addView(viewDrive)
+        .addView(viewUpload)
+        .setCallback(async (data: any) => {
+          if (data.action !== google.picker.Action.PICKED) return;
+
+          const pickedDocs = data.docs || [];
+          console.log("Picked documents:", pickedDocs);
+
+          let addedCount = 0; // ✅ REQUIRED
+
+          for (const doc of pickedDocs) {
+            const fileId = doc.id;
+            const fileName = doc.name;
+            const mimeType = doc.mimeType || "";
+            const lowerName = fileName.toLowerCase();
+
+            console.log("Processing:", fileName, mimeType);
+
+            // --------------------------------------------------------
+            // GOOGLE SHEETS → Export as CSV
+            // --------------------------------------------------------
+            if (mimeType.includes("spreadsheet")) {
+              const sheetCsv = await downloadGoogleSheetAsCsv(fileId, accessToken);
+
+              if (!sheetCsv) {
+                console.error("❌ Failed to convert Google Sheet:", fileName);
+                continue;
+              }
+
+              const { base64, size } = sheetCsv;
+
+              const newAttachment: Attachment = {
+                name: fileName.replace(/\.[^/.]+$/, "") + ".csv", // strips extension safely
+                url: `https://drive.google.com/uc?id=${fileId}&export=download`,
+                type: "text/csv",
+                size,
+                base64,
+              };
+
+              setAttachedFiles((prev) => {
+                const updated = [...prev, newAttachment];
+                onAttachmentsChange?.(updated);
+                return updated;
+              });
+
+              // Preview CSV (optional)
+              previewCsv(newAttachment.name, base64);
+
+              addedCount++;
+              continue; // Skip normal logic
+            }
+
+            // --------------------------------------------------------
+            // NORMAL FILE DOWNLOAD HANDLING
+            // --------------------------------------------------------
+            const downloaded = await fetchDriveFile(fileId, accessToken);
+
+            if (!downloaded) {
+              console.error("❌ Failed to download:", fileName);
+              continue;
+            }
+
+            const { blob, base64 } = downloaded;
+
+            const newAttachment: Attachment = {
+              name: fileName,
+              url: `https://drive.google.com/uc?id=${fileId}&export=download`,
+              type: mimeType,
+              size: blob.size,
+              base64,
+            };
+
+            setAttachedFiles((prev) => {
+              const updated = [...prev, newAttachment];
+              onAttachmentsChange?.(updated);
+              return updated;
+            });
+
+            // Optional CSV preview
+            if (lowerName.endsWith(".csv") || mimeType.includes("csv")) {
+              previewCsv(fileName, base64);
+            }
+
+            addedCount++;
+          }
+
+    // --------------------------------------------------------
+    // FINAL ALERT INSIDE CALLBACK
+    // --------------------------------------------------------
+    alert(`Added ${addedCount} file(s) from Google Drive`);
+  });
+
+  picker.setVisible(true);
+};
+
+// Render
     return (
       <div className="w-full">
         <div className="w-full max-w-[950px] bg-[#2a2a2a] rounded-2xl px-4 py-3 shadow-lg border border-neutral-700">
@@ -348,7 +697,12 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
           <div className="flex items-center justify-between w-full pt-2">
             {/* LEFT — + Menu + Tools */}
             <div className="flex items-center gap-4 text-gray-400">
-              {/* PLUS BUTTON */}
+          {/* PLUS BUTTON */}
+          {accessToken && (
+            <span className="text-green-400 text-xs ml-2">
+              ✓ Drive Connected
+            </span>
+          )}
               <div className="relative" ref={plusRef}>
                 <button
                   type="button"
@@ -461,24 +815,32 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               </div>
             </div>
 
-            {/* RIGHT — Advisor + Mic + Submit */}
+            {/* RIGHT — Agent + Mic + Submit */}
             <div className="flex items-center gap-3">
-              {/* ADVISOR MENU */}
-              <div className="relative" ref={advisorRef}>
+              {/* AGENT MENU */}
+              <div className="relative" ref={agentRef}>
                 <button
                   type="button"
-                  onClick={() => setIsAdvisorOpen((prev) => !prev)}
-                  className="flex items-center gap-2 text-sm hover:text-white transition"
+                  onClick={() => setIsAgentOpen((prev) => !prev)}
+                  className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition"
                 >
-                  <Grid className="w-4 h-4" />
-                  <span>{selectedAdvisor || 'Select advisor'}</span>
+                  <Image
+                    src={SelectIcon}
+                    alt="Select Agent"
+                    width={16}
+                    height={16}
+                    className="opacity-80"
+                  />
+                  <span className="text-sm text-gray-400">
+                    {SelectedAgent || 'Select Agent'}
+                  </span>
                 </button>
 
-                {isAdvisorOpen && (
+                {isAgentOpen && (
                   <div className="absolute bottom-10 right-0 w-64 border border-neutral-700 rounded-xl py-2 bg-[#4a4a4a] backdrop-blur-sm shadow-lg z-50">
                     {[
-                      'Legal advisor',
-                      'Financial advisor',
+                      'Legal Agent',
+                      'Financial Agent',
                       'Travel Planner',
                       'Code Debugger',
                       'Email Organizer',
@@ -488,8 +850,8 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                         key={label}
                         type="button"
                         onClick={() => {
-                          setSelectedAdvisor(label);
-                          setIsAdvisorOpen(false);
+                          setSelectedAgent(label);
+                          setIsAgentOpen(false);
                         }}
                         className="flex items-center gap-3 w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-[#3a3a3a] transition-all"
                       >
@@ -530,8 +892,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                   if (isAgentRunning && onStopAgent) {
                     onStopAgent();
                   } else {
-                    const text =
-                      typeof inputValue === 'string' ? inputValue : '';
+                    const text = typeof inputValue === 'string' ? inputValue : '';
                     if (!text.trim()) return;
 
                     onSubmit(text, attachedFiles || []);
@@ -549,9 +910,19 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                 )}
               >
                 {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2
+                    className={cn(
+                      'h-4 w-4 animate-spin',
+                      isActive ? 'text-white' : 'text-gray-400'
+                    )}
+                  />
                 ) : (
-                  <ArrowUp className="h-4 w-4" />
+                  <ArrowUp
+                    className={cn(
+                      'h-4 w-4',
+                      isActive ? 'text-white' : 'text-gray-400'
+                    )}
+                  />
                 )}
               </MotionButton>
             </div>

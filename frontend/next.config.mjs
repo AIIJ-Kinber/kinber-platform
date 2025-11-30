@@ -5,6 +5,11 @@ const nextConfig = {
     NEXT_PUBLIC_SUPABASE_URL: 'https://sujntuhrsbnzkbqmlspt.supabase.co',
     NEXT_PUBLIC_SUPABASE_ANON_KEY: 'sb_publishable_8NfFvVIgKJAeqIsANtD7cw_Y5gitLa4'
   },
+
+  images: {
+    domains: ['lh3.googleusercontent.com'],   // ✅ Google profile image domain
+  },
+
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {
@@ -15,4 +20,5 @@ const nextConfig = {
     return config
   }
 }
+
 export default nextConfig;
