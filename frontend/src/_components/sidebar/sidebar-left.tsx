@@ -30,6 +30,8 @@ import {
   DropdownMenuTrigger,
 } from '@/_components/ui/dropdown-menu';
 
+import { LogOut, User, CreditCard, Settings } from 'lucide-react';
+
 // ✅ Local Modals
 import { SearchChatModal } from './search-chat-modal';
 import { ChatHistoryModal } from './chat-history-modal';
@@ -40,7 +42,14 @@ import { CredentialsModal } from './credentials-modal';
 ────────────────────────────────────────────────── */
 export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = createClient();   // ✅ must come BEFORE handleLogout
+
+  // ✅ Logout Function (correct placement)
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.replace('/login');
+  };
+
   const { state, setOpen } = useSidebar();
   const pathname = usePathname();
 
@@ -50,6 +59,7 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
     email: 'loading@example.com',
     avatar: '',
   });
+
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showChatHistory, setShowChatHistory] = useState(false);
   const [showCredentials, setShowCredentials] = useState(false);
@@ -314,25 +324,65 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
 
         {/* ─── Fixed Footer ───────────────────────── */}
         <div className="flex-shrink-0 border-t border-neutral-800 px-4 py-3">
-          <div className="flex items-center gap-3 px-1 py-2 cursor-pointer hover:bg-[#2a2a2a] rounded-md transition">
-            <Image
-              src={user.avatar || '/user.png'}
-              alt="User Avatar"
-              width={36}
-              height={36}
-              className="h-9 w-9 rounded-full border border-gray-600 object-cover"
-            />
-            {state !== 'collapsed' && (
-              <div className="flex flex-col overflow-hidden">
-                <span className="text-sm font-semibold text-gray-100 truncate">
-                  {user.name}
-                </span>
-                <span className="text-xs text-gray-400 truncate">
-                  {user.email}
-                </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <div className="flex items-center gap-3 px-1 py-2 cursor-pointer hover:bg-[#2a2a2a] rounded-md transition">
+                <Image
+                  src={user.avatar || '/user.png'}
+                  alt="User Avatar"
+                  width={36}
+                  height={36}
+                  className="h-9 w-9 rounded-full border border-gray-600 object-cover"
+                />
+                {state !== 'collapsed' && (
+                  <div className="flex flex-col overflow-hidden">
+                    <span className="text-sm font-semibold text-gray-100 truncate">
+                      {user.name}
+                    </span>
+                    <span className="text-xs text-gray-400 truncate">
+                      {user.email}
+                    </span>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </DropdownMenuTrigger>
+
+            {/* ⭐ User Dropdown Content */}
+            <DropdownMenuContent
+              side="right"
+              align="start"
+              className="w-48 bg-[#1f1f1f] border border-gray-700 text-gray-100 rounded-md shadow-2xl"
+            >
+              <DropdownMenuItem className="cursor-default text-sm text-gray-300">
+                Signed in as<br />
+                <span className="font-semibold text-white">{user.email}</span>
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={() => router.push('/profile')}
+                className="cursor-pointer hover:bg-gray-700 text-sm gap-2"
+              >
+                <Key className="h-4 w-4 text-gray-300" />
+                Profile / Settings
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={() => router.push('/billing')}
+                className="cursor-pointer hover:bg-gray-700 text-sm gap-2"
+              >
+                <Shield className="h-4 w-4 text-gray-300" />
+                Subscription
+              </DropdownMenuItem>
+
+              <DropdownMenuItem
+                onClick={handleLogout}
+                className="cursor-pointer hover:bg-gray-700 text-sm text-red-400 gap-2 mt-1"
+              >
+                <LogOut className="h-4 w-4 text-red-400" />
+                Logout
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* ─── Modals ─────────────────────────── */}

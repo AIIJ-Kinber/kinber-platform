@@ -462,9 +462,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       }
     };
 
-    // ---------------------------------------------------------
-    // GOOGLE CLIENT + PICKER + AUTH INITIALIZATION
-    // ---------------------------------------------------------
+    // Load Google API + GIS
     useEffect(() => {
       if ((window as any).__googleApiLoaded) return;
       (window as any).__googleApiLoaded = true;
@@ -476,104 +474,108 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       script.onload = () => {
         console.log("📌 Google API script loaded");
 
-        // 1) Load gapi client and auth2
-        window.gapi.load("client:auth2", async () => {
-          try {
-            await window.gapi.client.init({
-              clientId: GOOGLE_CLIENT_ID,
-              scope: "https://www.googleapis.com/auth/drive.readonly",
-            });
-
-            await window.gapi.auth2.init({
-              client_id: GOOGLE_CLIENT_ID,
-              scope: "https://www.googleapis.com/auth/drive.readonly",
-            });
-
-            console.log("📌 Google Auth2 initialized");
-            setGoogleClientLoaded(true);
-          } catch (err) {
-            console.error("❌ Google Auth2 initialization failed:", err);
-          }
-        });
-
-        // 2) Load Picker API separately
+        // -------------------------------
+        // 1) Load Picker API
+        // -------------------------------
         window.gapi.load("picker", () => {
           console.log("📌 Google Picker loaded");
           setPickerLoaded(true);
         });
+
+        // -------------------------------
+        // 2) Google Identity Services Token Client
+        // -------------------------------
+        try {
+          const tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: "https://www.googleapis.com/auth/drive.readonly",
+            callback: (response: any) => {
+              if (response.access_token) {
+                console.log("✔ GIS Access Token:", response.access_token);
+                setAccessToken(response.access_token);
+                setGoogleClientLoaded(true);
+              }
+            },
+          });
+
+          console.log("📌 GIS Token Client created");
+
+          // Save token client globally so picker can call it
+          (window as any).__gisTokenClient = tokenClient;
+
+        } catch (err) {
+          console.error("❌ GIS Token Client init failed:", err);
+        }
       };
 
       document.body.appendChild(script);
     }, [GOOGLE_CLIENT_ID]);
 
-    // ---------------------------------------------------------
+// ---------------------------------------------------------
     // Create & open Google Drive Picker
     // ---------------------------------------------------------
     const openGooglePicker = (accessToken: string) => {
-      const google = (window as any).google;
+      const g = (window as any).google;
 
-      if (!pickerLoaded || !google || !google.picker) {
-        alert("Google Picker is still loading. Try again in 1–2 seconds.");
+      if (!pickerLoaded || !g || !g.picker) {
+        alert('Google Picker is still loading. Try again in 1–2 seconds.');
         return;
       }
 
-      // Views: show Files + Folders + Upload
-      const viewDocs = new google.picker.DocsView(google.picker.ViewId.DOCS)
-        .setParent("root")
-        .setIncludeFolders(true)
-        .setSelectFolderEnabled(false)
-        .setMode(google.picker.DocsViewMode.LIST)
-        .setMimeTypes("*/*");
+      // -------------------------------------------------------
+      // SINGLE VIEW — My Drive: files + folders
+      //    - No MIME filter
+      //    - Folders visible
+      //    - Files visible
+      // -------------------------------------------------------
+      const viewDocs = new g.picker.DocsView(g.picker.ViewId.DOCS)
+        .setIncludeFolders(true)        // show folders
+        .setSelectFolderEnabled(true)   // folders can be clicked if needed
+        .setParent('root')              // start at My Drive root
+        .setMode(g.picker.DocsViewMode.LIST);
 
-      const viewDrive = new google.picker.DocsView(google.picker.ViewId.DRIVE)
-        .setParent("root")
-        .setIncludeFolders(true)
-        .setSelectFolderEnabled(false)
-        .setMode(google.picker.DocsViewMode.LIST)
-        .setMimeTypes("*/*");
-
-      const viewUpload = new google.picker.DocsUploadView();
-
-      const picker = new google.picker.PickerBuilder()
-        .enableFeature(google.picker.Feature.NAV_HIDDEN)
-        .enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+      // -------------------------------------------------------
+      // BUILD PICKER
+      // -------------------------------------------------------
+      const picker = new g.picker.PickerBuilder()
+        .enableFeature(g.picker.Feature.NAV_HIDDEN)
+        .enableFeature(g.picker.Feature.MULTISELECT_ENABLED)
+        .enableFeature(g.picker.Feature.SUPPORT_DRIVES)
         .setOAuthToken(accessToken)
         .addView(viewDocs)
-        .addView(viewDrive)
-        .addView(viewUpload)
         .setCallback(async (data: any) => {
-          if (data.action !== google.picker.Action.PICKED) return;
+          if (data.action !== g.picker.Action.PICKED) return;
 
           const pickedDocs = data.docs || [];
-          console.log("Picked documents:", pickedDocs);
+          console.log('Picked documents:', pickedDocs);
 
-          let addedCount = 0; // ✅ REQUIRED
+          let addedCount = 0;
 
           for (const doc of pickedDocs) {
             const fileId = doc.id;
             const fileName = doc.name;
-            const mimeType = doc.mimeType || "";
+            const mimeType = doc.mimeType || '';
             const lowerName = fileName.toLowerCase();
 
-            console.log("Processing:", fileName, mimeType);
+            console.log('Processing:', fileName, mimeType);
 
             // --------------------------------------------------------
             // GOOGLE SHEETS → Export as CSV
             // --------------------------------------------------------
-            if (mimeType.includes("spreadsheet")) {
+            if (mimeType.includes('spreadsheet')) {
               const sheetCsv = await downloadGoogleSheetAsCsv(fileId, accessToken);
 
               if (!sheetCsv) {
-                console.error("❌ Failed to convert Google Sheet:", fileName);
+                console.error('❌ Failed to convert Google Sheet:', fileName);
                 continue;
               }
 
               const { base64, size } = sheetCsv;
 
               const newAttachment: Attachment = {
-                name: fileName.replace(/\.[^/.]+$/, "") + ".csv", // strips extension safely
+                name: fileName.replace(/\.[^/.]+$/, '') + '.csv',
                 url: `https://drive.google.com/uc?id=${fileId}&export=download`,
-                type: "text/csv",
+                type: 'text/csv',
                 size,
                 base64,
               };
@@ -584,11 +586,10 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                 return updated;
               });
 
-              // Preview CSV (optional)
+              // Optional CSV preview
               previewCsv(newAttachment.name, base64);
-
               addedCount++;
-              continue; // Skip normal logic
+              continue; // skip normal handling
             }
 
             // --------------------------------------------------------
@@ -597,7 +598,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
             const downloaded = await fetchDriveFile(fileId, accessToken);
 
             if (!downloaded) {
-              console.error("❌ Failed to download:", fileName);
+              console.error('❌ Failed to download:', fileName);
               continue;
             }
 
@@ -618,21 +619,25 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
             });
 
             // Optional CSV preview
-            if (lowerName.endsWith(".csv") || mimeType.includes("csv")) {
+            if (lowerName.endsWith('.csv') || mimeType.includes('csv')) {
               previewCsv(fileName, base64);
             }
 
             addedCount++;
           }
 
-    // --------------------------------------------------------
-    // FINAL ALERT INSIDE CALLBACK
-    // --------------------------------------------------------
-    alert(`Added ${addedCount} file(s) from Google Drive`);
-  });
+          alert(`Added ${addedCount} file(s) from Google Drive`);
+        })
+        .build();
 
-  picker.setVisible(true);
-};
+      // Safety guard
+      if (picker && typeof picker.setVisible === 'function') {
+        picker.setVisible(true);
+      } else {
+        console.error('❌ Picker instance is invalid:', picker);
+        alert('Google Picker failed to open. Check console for details.');
+      }
+    };
 
 // Render
     return (
