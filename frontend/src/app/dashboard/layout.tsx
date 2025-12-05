@@ -85,7 +85,7 @@ export default function DashboardLayout({
         "
         style={{
           width: sidebarWidth,
-          backgroundColor: '#252525ff',
+          backgroundColor: '#252525',
         }}
       >
         <SidebarLeft />
@@ -99,7 +99,7 @@ export default function DashboardLayout({
         "
         style={{
           marginLeft: sidebarWidth,
-          backgroundColor: '#252525ff',
+          backgroundColor: '#252525',
         }}
       >
         <div className="flex flex-col justify-between w-full max-w-[950px] h-full">

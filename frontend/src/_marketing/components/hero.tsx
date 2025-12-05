@@ -115,11 +115,11 @@ export function Hero() {
               className="mt-8 flex gap-3"
             >
               <Link
-                href="/welcome"
-                className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 transition"
-              >
-                Start for Free
-              </Link>
+              href="/login"
+              className="rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 transition"
+            >
+              Start for Free
+            </Link>
               <Link
                 href="#demo"
                 className="rounded-2xl px-5 py-3 border border-white/15 hover:bg-white/5 transition"

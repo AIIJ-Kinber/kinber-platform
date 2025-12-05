@@ -3,10 +3,11 @@ import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(req: NextRequest) {
-  // Create NextResponse to modify cookies if needed
   const res = NextResponse.next();
 
-  // Create Supabase client
+  // ------------------------------------------------------------
+  // 💡 Supabase SSR client (safe cookie handling)
+  // ------------------------------------------------------------
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -18,19 +19,29 @@ export async function middleware(req: NextRequest) {
         set(name: string, value: string, options: any) {
           try {
             res.cookies.set(name, value, options);
-          } catch {}
+          } catch (err) {
+            console.warn("Cookie SET failed:", err);
+          }
         },
         remove(name: string, options: any) {
           try {
             res.cookies.set(name, "", { ...options, maxAge: 0 });
-          } catch {}
+          } catch (err) {
+            console.warn("Cookie REMOVE failed:", err);
+          }
         },
       },
     }
   );
 
-  // Refresh session if needed (recommended in middleware)
-  await supabase.auth.getSession();
+  // ------------------------------------------------------------
+  // 🔄 Refresh session — SAFE, no cookie parsing needed
+  // ------------------------------------------------------------
+  try {
+    await supabase.auth.getSession();
+  } catch (err) {
+    console.warn("Supabase session refresh error:", err);
+  }
 
   return res;
 }

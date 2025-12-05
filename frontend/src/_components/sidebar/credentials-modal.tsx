@@ -11,16 +11,14 @@ interface CredentialsModalProps {
   onClose: () => void;
 }
 
-const SERVICES = ['Google Drive', 'Google Sheets', 'GitHub', 'Supabase'];
-
 export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
   const supabase = createClient();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  /* --------------------------------------------------------
-     Fetch profile when modal opens
-  -------------------------------------------------------- */
+  /* ----------------------------------------
+      Fetch profile when modal opens
+  ---------------------------------------- */
   useEffect(() => {
     if (!isOpen) return;
 
@@ -48,32 +46,9 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
     fetchProfile();
   }, [isOpen, supabase]);
 
-  /* --------------------------------------------------------
-    Google OAuth: Login / Logout
-  -------------------------------------------------------- */
-  const handleGoogleLogin = async () => {
-    try {
-      await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          scopes: 'https://www.googleapis.com/auth/drive.readonly',
-          queryParams: { access_type: 'offline', prompt: 'consent' },
-        },
-      });
-      // redirect happens automatically
-    } catch (err) {
-      console.error('Google OAuth error:', err);
-    }
-  };
-
-  const handleGoogleLogout = async () => {
-    await supabase.auth.signOut();
-    alert('Logged out from Google.');
-  };
-
-  /* --------------------------------------------------------
-     Save profile
-  -------------------------------------------------------- */
+  /* ----------------------------------------
+      Save profile
+  ---------------------------------------- */
   const handleSave = async () => {
     setLoading(true);
     const { error } = await supabase.from('profiles').upsert(profile);
@@ -82,6 +57,9 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
     onClose();
   };
 
+  /* ----------------------------------------
+      Portal mount container
+  ---------------------------------------- */
   const modalRoot =
     typeof document !== 'undefined'
       ? document.getElementById('modal-root')
@@ -89,6 +67,9 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
 
   if (!isOpen || !modalRoot) return null;
 
+  /* ----------------------------------------
+      Modal JSX (fully opaque)
+  ---------------------------------------- */
   return ReactDOM.createPortal(
     <AnimatePresence>
       {isOpen && (
@@ -100,7 +81,8 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
           onClick={onClose}
         >
           <motion.div
-            className="bg-[#373636ff] border border-gray-700 rounded-2xl shadow-2xl w-full max-w-3xl mx-auto p-6 relative text-gray-100"
+            className="bg-[#000000] border border-gray-700 rounded-2xl shadow-2xl w-full max-w-3xl mx-auto p-6 relative text-gray-100"
+            style={{ backgroundColor: '#373636ff' }}  // Fully opaque card
             initial={{ scale: 0.95, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
@@ -110,19 +92,20 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-lg font-semibold flex items-center gap-2">
-                <KeyRound className="w-5 h-5" /> Credentials & Profile
+                <KeyRound className="w-5 h-5" /> Profile Settings
               </h2>
               <button
                 onClick={onClose}
-                className="p-1 text-gray-400 hover:text-white"
+                className="p-1 text-gray-400 hover:text-white transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Profile */}
+            {/* Profile Form */}
             {profile && (
               <div className="space-y-4 mb-6">
+                {/* Name */}
                 <div>
                   <label className="block text-sm text-gray-400">Full Name</label>
                   <input
@@ -135,6 +118,7 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
                   />
                 </div>
 
+                {/* Email */}
                 <div>
                   <label className="block text-sm text-gray-400">Email</label>
                   <input
@@ -145,11 +129,10 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
                   />
                 </div>
 
+                {/* Organization & Role */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-gray-400">
-                      Organization
-                    </label>
+                    <label className="block text-sm text-gray-400">Organization</label>
                     <input
                       type="text"
                       className="w-full rounded-md bg-[#2a2a2a] border border-gray-600 p-2 mt-1 text-sm"
@@ -175,30 +158,14 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
               </div>
             )}
 
-            {/* Connected Services */}
-            <h3 className="text-md font-semibold mb-3">Connected Services</h3>
-
-            <div className="grid grid-cols-2 gap-3">
-              {SERVICES.map((service) => (
-                <CredentialsServiceRow
-                  key={service}
-                  service={service}
-                  supabase={supabase}
-                  isOpen={isOpen}
-                  onGoogleLogin={handleGoogleLogin}
-                  onGoogleLogout={handleGoogleLogout}
-                />
-              ))}
-            </div>
-
-            {/* Save button */}
-            <div className="flex justify-end mt-6">
+            {/* Save */}
+            <div className="flex justify-end">
               <button
                 onClick={handleSave}
                 disabled={loading}
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md text-white text-sm"
               >
-                {loading ? 'Saving...' : 'Save'}
+                {loading ? 'Saving…' : 'Save'}
               </button>
             </div>
           </motion.div>
@@ -208,130 +175,3 @@ export function CredentialsModal({ isOpen, onClose }: CredentialsModalProps) {
     modalRoot
   );
 }
-
-/* --------------------------------------------------------
-   Child component — Handles each service row
--------------------------------------------------------- */
-function CredentialsServiceRow({
-  service,
-  supabase,
-  isOpen,
-  onGoogleLogin,
-  onGoogleLogout,
-}: {
-  service: string;
-  supabase: any;
-  isOpen: boolean;
-  onGoogleLogin: () => void;
-  onGoogleLogout: () => void;
-}) {
-  const [connected, setConnected] = useState(false);
-
-  /* Load connection state */
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const check = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth?.user) return;
-
-      const { data } = await supabase
-        .from('credentials')
-        .select('status')
-        .eq('user_id', auth.user.id)
-        .eq('service_name', service)
-        .single();
-
-      setConnected(data?.status === 'connected');
-
-      // Google Drive auto-connect after OAuth redirect
-      if (service === 'Google Drive') {
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData.session?.provider_token) {
-          setConnected(true);
-
-          await supabase.from('credentials').upsert({
-            user_id: auth.user.id,
-            service_name: 'Google Drive',
-            status: 'connected',
-          });
-        }
-      }
-    };
-
-    check();
-  }, [isOpen, service, supabase]);
-
-  /* Default connect (GitHub, Supabase, etc.) */
-  const connect = async () => {
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) return alert('User not found');
-
-    const { error } = await supabase.from('credentials').upsert({
-      user_id: auth.user.id,
-      service_name: service,
-      status: 'connected',
-    });
-
-    if (error) return alert('Failed to connect');
-    setConnected(true);
-  };
-
-  /* Default disconnect */
-  const disconnect = async () => {
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth?.user) return alert('User not found');
-
-    const { error } = await supabase
-      .from('credentials')
-      .delete()
-      .eq('user_id', auth.user.id)
-      .eq('service_name', service);
-
-    if (error) return alert('Failed to disconnect');
-    setConnected(false);
-  };
-
-  return (
-    <div className="flex justify-between items-center bg-[#1f1f1f] border border-gray-700 rounded-md p-3 text-sm">
-      <span>{service}</span>
-
-      {/* Special UI for Google Drive */}
-      {service === 'Google Drive' ? (
-        connected ? (
-          <button
-            onClick={onGoogleLogout}
-            className="text-red-400 hover:text-red-300"
-          >
-            Disconnect
-          </button>
-        ) : (
-          <button
-            onClick={onGoogleLogin}
-            className="text-blue-400 hover:text-blue-300"
-          >
-            Connect with Google
-          </button>
-        )
-      ) : (
-        // Default behavior for other services
-        connected ? (
-          <button
-            onClick={disconnect}
-            className="text-red-400 hover:text-red-300"
-          >
-            Disconnect
-          </button>
-        ) : (
-          <button
-            onClick={connect}
-            className="text-blue-400 hover:text-blue-300"
-          >
-            Connect
-          </button>
-        )
-      )}
-    </div>
-  );
-}
-

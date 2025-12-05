@@ -1,5 +1,8 @@
-'use client';
+"use client";
 
+import { useEffect } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation"
 import { Hero } from "@/_marketing/components/hero";
 import { Nav } from "@/_marketing/components/nav";
 import { ValueGrid } from "@/_marketing/components/value-grid";
@@ -13,6 +16,20 @@ import { ContactBand } from "@/_marketing/components/contact-band";
 import { FadeInSection } from "@/_marketing/components/fade-in-section";
 
 export default function MarketingHome() {
+  const supabase = createClient();
+  const router = useRouter();
+
+  // 🔐 Prevent Loop — Redirect logged-in users away from homepage
+  useEffect(() => {
+    const check = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        router.replace("/welcome");
+      }
+    };
+    check();
+  }, [router, supabase]);
+
   return (
     <div
       className="relative flex flex-col w-full min-h-screen text-white bg-[#0b0b0c]"
