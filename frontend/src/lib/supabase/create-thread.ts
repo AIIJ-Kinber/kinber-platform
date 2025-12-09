@@ -2,17 +2,17 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * 🧵 Creates a new thread via backend (which also inserts into Supabase if configured).
- * Works even if Supabase client is not set up — safe fallback mode.
+ * Creates a new thread by calling YOUR FASTAPI BACKEND.
+ * Backend route: POST /thread/
  */
 export const createThreadInSupabase = async (
   title: string = 'New Conversation',
   user_id: string = 'guest'
 ) => {
   try {
-    // ──────────────────────────────────────────────
-    // Resolve backend URL safely (no /api suffix allowed)
-    // ──────────────────────────────────────────────
+    // ---------------------------------------------
+    // 1) RESOLVE BACKEND BASE URL
+    // ---------------------------------------------
     let base = process.env.NEXT_PUBLIC_BACKEND_URL?.trim();
 
     if (!base) {
@@ -21,22 +21,22 @@ export const createThreadInSupabase = async (
         (window.location.hostname === 'localhost' ||
           window.location.hostname === '127.0.0.1')
       ) {
-        base = 'http://127.0.0.1:8000';
+        base = 'http://127.0.0.1:8000'; // local backend
       } else {
-        base = 'https://api.kinber.com';
+        base = 'https://api.kinber.com'; // production backend
       }
     }
 
-    // Remove trailing slashes to avoid /api/api/thread duplication
+    // Remove trailing slashes
     base = base.replace(/\/+$/, '');
 
-    console.log('🔗 Using backend base URL:', base);
+    console.log('🔗 Backend base URL:', base);
 
-    // ──────────────────────────────────────────────
-    // Step 1 — Create thread via backend
-    // MUST BE: POST /api/thread/ (with trailing slash)
-    // ──────────────────────────────────────────────
-    const endpoint = `${base}/api/thread/`;  // ✅ Added trailing slash
+    // ---------------------------------------------
+    // 2) FIXED ENDPOINT (matches FastAPI exactly)
+    // FastAPI route = POST /thread/
+    // ---------------------------------------------
+    const endpoint = `${base}/thread/`;
 
     console.log('📡 Thread creation POST →', endpoint);
 
@@ -54,26 +54,24 @@ export const createThreadInSupabase = async (
       console.error(
         '❌ Backend thread creation failed:',
         response.status,
-        `"${JSON.stringify(errText)}"` // Better error logging
+        `"${JSON.stringify(errText)}"`
       );
-      throw new Error(
-        `Backend responded with ${response.status} "${errText}"`
-      );
+      throw new Error(`Backend responded with ${response.status}: ${errText}`);
     }
 
     const result = await response.json();
-    const threadId = result?.data?.thread_id || result?.thread_id;
+    const threadId = result?.thread_id || result?.data?.thread_id;
 
     if (!threadId) {
-      console.error('⚠️ No valid thread_id returned from backend:', result);
-      throw new Error('No valid thread_id returned from backend.');
+      console.error('⚠️ Invalid response from backend:', result);
+      throw new Error('Backend did not return a thread_id.');
     }
 
-    console.log('🧵 Thread created via backend:', threadId);
+    console.log('🧵 Thread created successfully:', threadId);
 
-    // ──────────────────────────────────────────────
-    // Step 2 — Optional local Supabase sync
-    // ──────────────────────────────────────────────
+    // ---------------------------------------------
+    // 3) OPTIONAL local Supabase sync
+    // ---------------------------------------------
     try {
       const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const SUPABASE_KEY =
@@ -82,6 +80,7 @@ export const createThreadInSupabase = async (
 
       if (SUPABASE_URL && SUPABASE_KEY) {
         const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
         await supabase.from('threads').upsert([
           {
             id: threadId,
@@ -91,16 +90,14 @@ export const createThreadInSupabase = async (
             updated_at: new Date().toISOString(),
           },
         ]);
-      } else {
-        console.warn('⚠️ Supabase credentials missing — skipping upsert.');
       }
     } catch (supabaseErr) {
-      console.warn('⚠️ Failed to sync thread to Supabase:', supabaseErr);
+      console.warn('⚠️ Supabase sync skipped or failed:', supabaseErr);
     }
 
-    // ──────────────────────────────────────────────
-    // Step 3 — Notify sidebar UI
-    // ──────────────────────────────────────────────
+    // ---------------------------------------------
+    // 4) Notify the UI
+    // ---------------------------------------------
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent('thread:created', { detail: { thread_id: threadId } })

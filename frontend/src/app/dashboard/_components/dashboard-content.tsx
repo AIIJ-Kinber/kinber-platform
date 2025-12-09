@@ -233,7 +233,7 @@ function DashboardContent({ threadId }: { threadId?: string }) {
           );
         }
 
-        // Build backend payload
+          // Build backend payload
         const payload = {
           message: trimmed,
           model_name: 'gemini-2.0-flash-exp',
@@ -247,8 +247,20 @@ function DashboardContent({ threadId }: { threadId?: string }) {
           })),
         };
 
+        // 🔍 DEBUG: see exactly what we are sending
+        console.log("🚚 Sending payload to backend:", {
+          threadId: newThreadId,
+          attachmentsCount: payload.attachments?.length ?? 0,
+          attachments: payload.attachments.map((a) => ({
+            name: a.name,
+            hasBase64: !!a.base64,
+            url: a.url,
+            type: a.type,
+          })),
+        });
+
         const res = await fetch(
-          `${backendBase}/api/thread/${newThreadId}/agent/start`,
+          `${backendBase}/thread/${newThreadId}/agent/start`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -341,29 +353,33 @@ function DashboardContent({ threadId }: { threadId?: string }) {
 
           /* ----------- Send tool result back ----------- */
           try {
-            const second = await fetch(
-              `${backendBase}/api/thread/${newThreadId}/agent/start`,
-              {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  message: JSON.stringify({
-                    tool: toolCall.tool,
-                    tool_result: toolResult,
-                  }),
-                  agent: 'default',
-                }),
-              }
-            );
+                    const second = await fetch(
+                      `${backendBase}/thread/${newThreadId}/agent/start`,
+                      {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          message: JSON.stringify({
+                            tool: toolCall.tool,
+                            tool_result: toolResult,
+                          }),
+                          model_name: "gemini-2.0-flash-exp",
+                          agent: "default",
+                          attachments: [], // required even if no files
+                        }),
+                      }
+                    );
 
-            const j2 = await second.json();
+                    const j2 = await second.json();
 
-            finalReply =
-              j2?.data?.assistant_reply ||
-              j2?.assistant_reply ||
-              j2?.message ||
-              finalReply;
-          } catch {}
+                    finalReply =
+                      j2?.data?.assistant_reply ||
+                      j2?.assistant_reply ||
+                      j2?.message ||
+                      finalReply;
+          } catch (err) {
+                    console.warn("Tool follow-up failed:", err);
+          }
         }
 
         // Fallback text
@@ -401,17 +417,22 @@ function DashboardContent({ threadId }: { threadId?: string }) {
     [backendBase, threadId, initiatedThreadId, attachedFiles, scrollToBottom]
   );
 
-  /* ---------------------------------------------------------
-     EFFECTS
-  --------------------------------------------------------- */
+        /* ---------------------------------------------------------
+            Global file collector (local + Google Drive)
+        --------------------------------------------------------- */
+        useEffect(() => {
+            const handleFileAttached = (e: any) => {
+                const file = e.detail;
+                if (!file) return;
 
-  // Attach file listener
-  useEffect(() => {
-    const handler = (e: any) =>
-      setAttachedFiles((prev) => [...prev, e.detail]);
-    window.addEventListener('file:attached', handler);
-    return () => window.removeEventListener('file:attached', handler);
-  }, []);
+                console.log("📎 File received in dashboard-content:", file);
+
+                setAttachedFiles((prev) => [...prev, file]);
+            };
+
+            window.addEventListener("file:attached", handleFileAttached);
+            return () => window.removeEventListener("file:attached", handleFileAttached);
+        }, []);
 
   // Scroll button
   useEffect(() => {
@@ -448,7 +469,7 @@ function DashboardContent({ threadId }: { threadId?: string }) {
       if (firstMsgRef.current || isSubmittingFirstMsg.current) return;
 
       try {
-        const r = await fetch(`${backendBase}/api/thread/${tid}`);
+        const r = await fetch(`${backendBase}/api/thread/${tid}/`);
         if (!r.ok) return;
         const json = await r.json();
 
@@ -726,7 +747,7 @@ function DashboardContent({ threadId }: { threadId?: string }) {
             padding: '0 24px',
           }}
         >
-          <MessageInput
+          <MessageInput 
             ref={chatInputRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
@@ -734,9 +755,13 @@ function DashboardContent({ threadId }: { threadId?: string }) {
             placeholder="Describe what you need help with..."
             loading={isSubmitting}
             disabled={isGenerating}
+
+            /* 🔥 CRITICAL FIX — Dashboard must store attachments */
             onAttachmentsChange={(files) => {
+              console.log("📎 Dashboard received attachments:", files);
               Promise.resolve().then(() => setAttachedFiles(files));
             }}
+
             isAgentRunning={isGenerating}
             onTranscription={(text) => {
               setInputValue((prev) =>

@@ -131,80 +131,13 @@ export function SidebarLeft({ ...props }: React.ComponentProps<typeof Sidebar>) 
     };
   }, [supabase]);
 
-  /* 🔁 WebSocket live updates */
-  useEffect(() => {
-    const base = (
-      process.env.NEXT_PUBLIC_BACKEND_URL?.trim() ||
-      ((typeof window !== 'undefined' &&
-        (window.location.hostname === 'localhost' ||
-          window.location.hostname === '127.0.0.1'))
-        ? 'http://127.0.0.1:8000'
-        : 'https://api.kinber.com')
-    ).replace(/\/+$/, '');
-
-    const wsUrl = base.replace(/^http/i, 'ws') + '/api/thread/updates';
-    let ws: WebSocket | null = null;
-
-    try {
-      ws = new WebSocket(wsUrl);
-      ws.onopen = () => console.log('🔌 WS connected:', wsUrl);
-      ws.onmessage = (evt) => {
-        try {
-          const msg = JSON.parse(evt.data);
-          if (!msg?.type || !msg?.payload) return;
-
-          if (msg.type === 'thread.created') {
-            const t = msg.payload;
-            setRecents((prev) => {
-              if (prev.some((p) => p.thread_id === t.thread_id)) return prev;
-              return [
-                {
-                  thread_id: t.thread_id,
-                  title: t.title || 'Untitled Chat',
-                  summary: t.summary || null,
-                  metadata: t.metadata || {},
-                  updated_at: t.updated_at,
-                  created_at: t.created_at,
-                },
-                ...prev,
-              ].slice(0, 10);
-            });
-          }
-
-          if (msg.type === 'thread.updated') {
-            const t = msg.payload;
-            setRecents((prev) =>
-              prev.map((p) =>
-                p.thread_id === t.thread_id
-                  ? {
-                      ...p,
-                      title: t.title ?? p.title,
-                      summary: t.summary ?? p.summary,
-                      metadata: t.metadata ?? p.metadata,
-                      updated_at: t.updated_at ?? p.updated_at,
-                    }
-                  : p
-              )
-            );
-          }
-        } catch (e) {
-          console.warn('WS parse error:', e);
-        }
-      };
-      ws.onerror = (e) => console.warn('🔌 WS error:', e);
-    } catch (e) {
-      console.warn('🔌 WS connect failed:', e);
-    }
-
-    return () => {
-      try {
-        ws?.close();
-      } catch {
-        // ignore
-      }
-    };
-  }, []);
-
+/* 🔁 WebSocket live updates (DISABLED — backend does not support WS yet)
+        Prevents 403 spam and /api/api URL mistakes
+    */
+    useEffect(() => {
+        console.log("ℹ️ WebSocket updates disabled — backend has no /api/thread/updates endpoint.");
+        return () => {};
+    }, []);
   /* ──────────────────────────────────────────────── */
   return (
     <SidebarProvider>
