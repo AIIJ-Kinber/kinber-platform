@@ -75,7 +75,7 @@ export function SearchChatModal({ isOpen, onClose }: SearchChatModalProps) {
           if (messageMatches?.length) {
             matchingThreadIds = [
               ...new Set(messageMatches.map((m: any) => m.thread_id)),
-            ];
+            ] as string[];
           }
         }
 
