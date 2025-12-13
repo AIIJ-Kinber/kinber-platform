@@ -453,9 +453,48 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
           setIsAgentOpen(false);
         }
       };
-
       document.addEventListener("mousedown", handleClick);
       return () => document.removeEventListener("mousedown", handleClick);
+    }, []);
+
+    /* ---------------------------------------------------------
+      Paste Image Support (CTRL+V)
+    --------------------------------------------------------- */
+    useEffect(() => {
+      const handlePaste = async (e: ClipboardEvent) => {
+        if (!e.clipboardData) return;
+
+        const items = e.clipboardData.items;
+        if (!items || items.length === 0) return;
+
+        for (const item of items) {
+          if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (!file) continue;
+
+            const base64 = await fileToBase64(file);
+
+            const newItem: Attachment = {
+              name: file.name || "pasted-image.png",
+              url: "",
+              type: file.type,
+              size: file.size,
+              base64,
+            };
+
+            console.log("📎 Pasted image → attached:", newItem);
+
+            setAttachedFiles((prev) => {
+              const updated = [...prev, newItem];
+              onAttachmentsChange?.(updated);
+              return updated;
+            });
+          }
+        }
+      };
+
+      window.addEventListener("paste", handlePaste);
+      return () => window.removeEventListener("paste", handlePaste);
     }, []);
 
     /* ---------------------------------------------------------
