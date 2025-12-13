@@ -2,6 +2,8 @@
 .env
 .env.local
 frontend/.env
+backend/.env
+
 # dependencies
 /node_modules
 /.pnp
