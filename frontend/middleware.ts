@@ -47,5 +47,12 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/api/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/api/:path*",
+    // ❗ Explicitly EXCLUDE health check
+    // Middleware will NOT run for /api/health
+    "/((?!api/health).*)",
+  ],
 };
+
