@@ -1341,3 +1341,5 @@
 2025-12-14 22:49:20,502 [INFO] HTTP Request: POST https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/messages?columns=%22role%22%2C%22metadata%22%2C%22thread_id%22%2C%22content%22%2C%22attachments%22 "HTTP/2 201 Created"
 2025-12-14 22:49:20,662 [INFO] HTTP Request: PATCH https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?thread_id=eq.b4ae6dea-2ed9-4f1a-b15d-04c52dfb9ada "HTTP/2 200 OK"
 2025-12-14 22:49:20,665 [INFO] POST /api/thread/b4ae6dea-2ed9-4f1a-b15d-04c52dfb9ada/agent/start [200] 6476.44ms
+2025-12-15 00:39:36,755 [INFO] OPTIONS /thread/ [200] 0.46ms
+2025-12-15 00:39:36,758 [INFO] POST /thread/ [404] 0.44ms
