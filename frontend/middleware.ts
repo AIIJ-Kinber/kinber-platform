@@ -3,6 +3,14 @@ import type { NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
 export async function middleware(req: NextRequest) {
+  // ------------------------------------------------------------
+  // 🛑 SAFETY GUARD
+  // Prevent middleware crash if env vars are missing (Vercel)
+  // ------------------------------------------------------------
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return NextResponse.next();
+  }
+
   const res = NextResponse.next();
 
   // ------------------------------------------------------------
@@ -35,7 +43,7 @@ export async function middleware(req: NextRequest) {
   );
 
   // ------------------------------------------------------------
-  // 🔄 Refresh session — SAFE, no cookie parsing needed
+  // 🔄 Refresh session (safe)
   // ------------------------------------------------------------
   try {
     await supabase.auth.getSession();
@@ -46,13 +54,15 @@ export async function middleware(req: NextRequest) {
   return res;
 }
 
+// ------------------------------------------------------------
+// 🎯 Middleware scope (VERY IMPORTANT)
+// ------------------------------------------------------------
 export const config = {
   matcher: [
     "/dashboard/:path*",
+    "/auth/:path*",
     "/api/:path*",
-    // ❗ Explicitly EXCLUDE health check
-    // Middleware will NOT run for /api/health
-    "/((?!api/health).*)",
   ],
 };
+
 
