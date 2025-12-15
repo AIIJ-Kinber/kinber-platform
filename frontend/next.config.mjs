@@ -2,6 +2,11 @@
 const nextConfig = {
   reactStrictMode: true,
 
+  // ✅ IMPORTANT: Explicitly enable App Router in /src/app
+  experimental: {
+    appDir: true,
+  },
+
   images: {
     domains: ['lh3.googleusercontent.com'],
   },
