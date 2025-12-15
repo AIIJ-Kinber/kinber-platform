@@ -55,14 +55,19 @@ export async function middleware(req: NextRequest) {
 }
 
 // ------------------------------------------------------------
-// 🎯 Middleware scope (VERY IMPORTANT)
+// 🎯 Middleware scope (VERCEL SAFE)
 // ------------------------------------------------------------
 export const config = {
   matcher: [
+    /*
+      Apply middleware ONLY to protected app areas.
+      Never touch marketing or root routes.
+    */
     "/dashboard/:path*",
+    "/welcome/:path*",
     "/auth/:path*",
-    "/api/:path*",
   ],
 };
+
 
 
