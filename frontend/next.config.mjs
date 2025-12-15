@@ -6,12 +6,6 @@ const nextConfig = {
     domains: ['lh3.googleusercontent.com'],
   },
 
-  experimental: {
-    appDir: true,
-  },
-
-  output: 'standalone',
-
   webpack: (config, { dev }) => {
     if (dev) {
       config.watchOptions = {
