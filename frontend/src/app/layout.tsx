@@ -41,7 +41,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 // ✅ Create Supabase Server Client (Next.js 15 SAFE)
 // ----------------------------------------------
 const cookieStore = await cookies();
-
 const supabase = createServerClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -58,7 +57,7 @@ const supabase = createServerClient(
 try {
   await supabase.auth.getSession();
 } catch {
-  // prevent SSR crash
+  // swallow errors – never crash layout
 }
 
 
