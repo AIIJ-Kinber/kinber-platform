@@ -140,22 +140,7 @@ try {
           className="flex h-screen w-screen overflow-hidden"
           style={{ backgroundColor: '#2a2a2a', flex: 1 }}
         >
-          <Providers>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="system"
-              enableSystem
-              disableTransitionOnChange
-            >
-              <AuthProvider>
-                <SidebarProvider>
-                  {children}
-                  <Toaster />
-                </SidebarProvider>
-              </AuthProvider>
-              <GoogleAnalytics gaId="G-6ETJFB3PT3" />
-            </ThemeProvider>
-          </Providers>
+          {children}
         </div>
 
         {/* Modal Root */}
