@@ -37,25 +37,30 @@ export const viewport: Viewport = {
 // =======================
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
 
-  // ----------------------------------------------
-  // ✅ Create Supabase Server Client (fixed)
-  // ----------------------------------------------
-  const cookieStore = await cookies();
+// ----------------------------------------------
+// ✅ Create Supabase Server Client (CORRECT)
+// ----------------------------------------------
+const cookieStore = cookies();
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
+const supabase = createServerClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    cookies: {
+      get(name: string) {
+        return cookieStore.get(name)?.value;
       },
-    }
-  );
+    },
+  }
+);
 
-  // Force-refresh Supabase session (fixes auth persistence)
+// Safe session refresh (do NOT crash SSR)
+try {
   await supabase.auth.getSession();
+} catch {
+  // ignore – prevents server render crash
+}
+
 
   // ----------------------------------------------
   // Layout continues normally...
