@@ -1,13 +1,10 @@
 "use client";
 
-import { Nav } from "@/_marketing/components/nav";
-import { Hero } from "@/_marketing/components/hero";
-
-export default function Home() {
+export default function Page() {
   return (
-    <main style={{ minHeight: "100vh", background: "#0b0b0c", color: "white" }}>
-      <Nav />
-      <Hero />
-    </main>
+    <div style={{ padding: 40, color: "white" }}>
+      <h1>Landing page test</h1>
+      <p>If you see this, layout providers are crashing.</p>
+    </div>
   );
 }
