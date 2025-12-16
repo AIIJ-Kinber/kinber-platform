@@ -38,9 +38,9 @@ export const viewport: Viewport = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
 
 // ----------------------------------------------
-// ✅ Create Supabase Server Client (CORRECT)
+// ✅ Create Supabase Server Client (Next.js 15 SAFE)
 // ----------------------------------------------
-const cookieStore = cookies();
+const cookieStore = await cookies();
 
 const supabase = createServerClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -54,11 +54,11 @@ const supabase = createServerClient(
   }
 );
 
-// Safe session refresh (do NOT crash SSR)
+// Force-refresh Supabase session (safe)
 try {
   await supabase.auth.getSession();
 } catch {
-  // ignore – prevents server render crash
+  // prevent SSR crash
 }
 
 
