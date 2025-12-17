@@ -1,11 +1,14 @@
 
 'use client';
+
 export const dynamic = "force-dynamic";
+export const runtime = "edge";
 
 import { useState } from 'react';
 import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+
 
 export default function LoginPage() {
   const supabase = createClient();
