@@ -1,10 +1,9 @@
 "use client";
 
-export default function Page() {
+export default function Home() {
   return (
-    <div style={{ padding: 40, color: "white" }}>
-      <h1>Landing page test</h1>
-      <p>If you see this, layout providers are crashing.</p>
-    </div>
+    <main className="min-h-screen flex items-center justify-center bg-[#0b0b0c] text-gray-100">
+      <h1 className="text-3xl font-bold">Welcome to Kinber</h1>
+    </main>
   );
 }
