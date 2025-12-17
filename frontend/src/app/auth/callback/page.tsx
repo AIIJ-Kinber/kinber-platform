@@ -1,6 +1,7 @@
 'use client';
 
 export const dynamic = "force-dynamic";
+export const runtime = "edge";
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
@@ -14,9 +15,6 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     const handleCallback = async () => {
-      // Supabase returns either:
-      // 1) code (PKCE)
-      // 2) access_token in URL fragment
       const hash = window.location.hash;
       const params = new URLSearchParams(hash.substring(1));
 
@@ -28,7 +26,6 @@ export default function AuthCallbackPage() {
         return;
       }
 
-      // Save session manually
       const { error } = await supabase.auth.setSession({
         access_token: accessToken,
         refresh_token: refreshToken || '',
@@ -40,7 +37,6 @@ export default function AuthCallbackPage() {
       }
 
       setMessage('✅ Email verified successfully! Redirecting...');
-
       setTimeout(() => router.push('/dashboard'), 1200);
     };
 
@@ -56,3 +52,4 @@ export default function AuthCallbackPage() {
     </div>
   );
 }
+
