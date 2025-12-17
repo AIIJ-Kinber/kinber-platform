@@ -1,5 +1,6 @@
 'use client';
 export const dynamic = "force-dynamic";
+export const runtime = "edge";
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
