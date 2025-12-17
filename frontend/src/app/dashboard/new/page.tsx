@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 export const runtime = "edge";
 
+import { createClient } from '@/lib/supabase/client';
 import { useEffect } from 'react';
 import { createThreadInSupabase } from '@/lib/supabase/create-thread';
 
