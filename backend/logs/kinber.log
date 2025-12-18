@@ -1361,3 +1361,40 @@
 2025-12-15 11:31:10,086 [INFO] POST /api/thread/b535ad3d-d166-4fb0-9a84-36b66ab792ac/agent/start [200] 6848.10ms
 2025-12-15 11:45:43,302 [INFO] GET /api/api/thread/b535ad3d-d166-4fb0-9a84-36b66ab792ac/ [404] 0.48ms
 2025-12-15 11:45:43,307 [INFO] GET /api/api/thread/b535ad3d-d166-4fb0-9a84-36b66ab792ac/ [404] 0.35ms
+2025-12-19 00:23:57,002 [ERROR] Task exception was never retrieved
+future: <Task finished name='Task-2' coro=<AsyncClient.aclose() done, defined at C:\Users\moham\kinber-platform\venv\Lib\site-packages\httpx\_client.py:1978> exception=AttributeError("'AsyncHttpxClientWrapper' object has no attribute '_state'")>
+Traceback (most recent call last):
+  File "C:\Users\moham\kinber-platform\venv\Lib\site-packages\httpx\_client.py", line 1982, in aclose
+    if self._state != ClientState.CLOSED:
+       ^^^^^^^^^^^
+AttributeError: 'AsyncHttpxClientWrapper' object has no attribute '_state'
+2025-12-19 00:59:32,266 [ERROR] Task exception was never retrieved
+future: <Task finished name='Task-2' coro=<AsyncClient.aclose() done, defined at C:\Users\moham\kinber-platform\venv\Lib\site-packages\httpx\_client.py:1978> exception=AttributeError("'AsyncHttpxClientWrapper' object has no attribute '_state'")>
+Traceback (most recent call last):
+  File "C:\Users\moham\kinber-platform\venv\Lib\site-packages\httpx\_client.py", line 1982, in aclose
+    if self._state != ClientState.CLOSED:
+       ^^^^^^^^^^^
+AttributeError: 'AsyncHttpxClientWrapper' object has no attribute '_state'
+2025-12-19 01:00:38,609 [ERROR] Task exception was never retrieved
+future: <Task finished name='Task-2' coro=<AsyncClient.aclose() done, defined at C:\Users\moham\kinber-platform\venv\Lib\site-packages\httpx\_client.py:1978> exception=AttributeError("'AsyncHttpxClientWrapper' object has no attribute '_state'")>
+Traceback (most recent call last):
+  File "C:\Users\moham\kinber-platform\venv\Lib\site-packages\httpx\_client.py", line 1982, in aclose
+    if self._state != ClientState.CLOSED:
+       ^^^^^^^^^^^
+AttributeError: 'AsyncHttpxClientWrapper' object has no attribute '_state'
+2025-12-19 01:38:32,849 [INFO] OPTIONS /api/thread/ [200] 0.00ms
+2025-12-19 01:38:33,463 [INFO] HTTP Request: POST https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads "HTTP/2 201 Created"
+2025-12-19 01:38:33,464 [INFO] POST /api/thread/ [200] 612.99ms
+2025-12-19 01:38:37,382 [INFO] GET /api/api/thread/82e21765-7d2e-460f-b3eb-c0f25f34d412/ [404] 0.00ms
+2025-12-19 01:38:37,583 [INFO] OPTIONS /api/thread/82e21765-7d2e-460f-b3eb-c0f25f34d412/agent/start [200] 1.15ms
+2025-12-19 01:38:37,742 [INFO] HTTP Request: GET https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?select=user_id&thread_id=eq.82e21765-7d2e-460f-b3eb-c0f25f34d412 "HTTP/2 200 OK"
+2025-12-19 01:38:38,048 [INFO] HTTP Request: PATCH https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?thread_id=eq.82e21765-7d2e-460f-b3eb-c0f25f34d412 "HTTP/2 409 Conflict"
+2025-12-19 01:38:38,356 [INFO] HTTP Request: GET https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/messages?select=role%2Ccontent%2Ccreated_at&thread_id=eq.82e21765-7d2e-460f-b3eb-c0f25f34d412&order=created_at.asc&limit=8 "HTTP/2 200 OK"
+2025-12-19 01:38:38,562 [INFO] HTTP Request: GET https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/long_term_memory?select=memory_type%2Ccontent%2Cimportance&thread_id=eq.82e21765-7d2e-460f-b3eb-c0f25f34d412&order=importance.desc&limit=10 "HTTP/2 200 OK"
+2025-12-19 01:38:38,766 [INFO] HTTP Request: GET https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?select=summary%2Cmetadata&thread_id=eq.82e21765-7d2e-460f-b3eb-c0f25f34d412 "HTTP/2 200 OK"
+2025-12-19 01:38:42,769 [INFO] HTTP Request: GET https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?select=summary%2Cmetadata&thread_id=eq.82e21765-7d2e-460f-b3eb-c0f25f34d412 "HTTP/2 200 OK"
+2025-12-19 01:38:43,739 [INFO] HTTP Request: PATCH https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?thread_id=eq.82e21765-7d2e-460f-b3eb-c0f25f34d412 "HTTP/2 200 OK"
+2025-12-19 01:38:43,987 [INFO] HTTP Request: POST https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/long_term_memory "HTTP/2 201 Created"
+2025-12-19 01:38:44,192 [INFO] HTTP Request: POST https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/messages?columns=%22content%22%2C%22metadata%22%2C%22role%22%2C%22thread_id%22%2C%22attachments%22 "HTTP/2 201 Created"
+2025-12-19 01:38:44,406 [INFO] HTTP Request: PATCH https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?thread_id=eq.82e21765-7d2e-460f-b3eb-c0f25f34d412 "HTTP/2 200 OK"
+2025-12-19 01:38:44,408 [INFO] POST /api/thread/82e21765-7d2e-460f-b3eb-c0f25f34d412/agent/start [200] 6823.23ms

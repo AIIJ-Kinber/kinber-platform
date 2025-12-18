@@ -5,6 +5,7 @@ import { SidebarLeft } from '@/_components/sidebar/sidebar-left';
 import { useSidebar } from '@/_components/ui/sidebar';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import ClientLayout from '../client-layout';
 
 export default function DashboardLayout({
   children,
@@ -74,38 +75,40 @@ export default function DashboardLayout({
   // MAIN LAYOUT (SAFE)
   // -------------------------------------------------------
   return (
-    <div className="relative flex h-screen w-full bg-[#161616] text-gray-100 overflow-hidden">
+    <ClientLayout>
+      <div className="relative flex h-screen w-full bg-[#161616] text-gray-100 overflow-hidden">
 
-      {/* Sidebar */}
-      <div
-        className="
-          fixed left-0 top-0 h-full z-30
-          overflow-y-auto overflow-x-hidden
-          hide-scrollbar transition-all duration-300
-        "
-        style={{
-          width: sidebarWidth,
-          backgroundColor: '#252525',
-        }}
-      >
-        <SidebarLeft />
-      </div>
+        {/* Sidebar */}
+        <div
+          className="
+            fixed left-0 top-0 h-full z-30
+            overflow-y-auto overflow-x-hidden
+            hide-scrollbar transition-all duration-300
+          "
+          style={{
+            width: sidebarWidth,
+            backgroundColor: '#252525',
+          }}
+        >
+          <SidebarLeft />
+        </div>
 
-      {/* Main Content */}
-      <div
-        className="
-          flex flex-1 flex-col items-center justify-between
-          w-full h-full overflow-hidden transition-all duration-300
-        "
-        style={{
-          marginLeft: sidebarWidth,
-          backgroundColor: '#252525',
-        }}
-      >
-        <div className="flex flex-col justify-between w-full max-w-[950px] h-full">
-          {children}
+        {/* Main Content */}
+        <div
+          className="
+            flex flex-1 flex-col items-center justify-between
+            w-full h-full overflow-hidden transition-all duration-300
+          "
+          style={{
+            marginLeft: sidebarWidth,
+            backgroundColor: '#252525',
+          }}
+        >
+          <div className="flex flex-col justify-between w-full max-w-[950px] h-full">
+            {children}
+          </div>
         </div>
       </div>
-    </div>
+    </ClientLayout>
   );
 }
