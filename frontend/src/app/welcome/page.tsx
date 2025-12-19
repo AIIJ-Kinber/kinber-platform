@@ -9,7 +9,7 @@ import { SidebarLeft } from '../../_components/sidebar/sidebar-left';
 import { MessageInput } from '../../_components/thread/chat-input/message-input';
 import { createThreadInSupabase } from '../../lib/supabase/create-thread';
 import { createClient } from '@/lib/supabase/client';
-
+import { apiFetch } from '@/lib/api';
 export default function WelcomePage() {
   const supabase = createClient();
   const router = useRouter();
@@ -64,30 +64,26 @@ const handleLocalSubmit = async (
       throw new Error('API base URL not configured');
     }
 
-    // 1️⃣ Create thread via BACKEND (not frontend-relative)
-    const res = await fetch(`${API_BASE}/api/thread`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      credentials: 'include', // important for prod auth
-      body: JSON.stringify({
-        title: 'New Conversation',
-        user_id: 'guest',
-      }),
-    });
+// 1️⃣ Create thread via BACKEND (PRODUCTION-SAFE)
+const res = await apiFetch('/api/thread', {
+  method: 'POST',
+  body: JSON.stringify({
+    title: 'New Conversation',
+    user_id: 'guest',
+  }),
+});
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`Thread creation failed: ${errText}`);
-    }
+if (!res.ok) {
+  const errText = await res.text();
+  throw new Error(`Thread creation failed: ${errText}`);
+}
 
-    const data = await res.json();
-    const threadId = data?.thread_id;
+const data = await res.json();
+const threadId = data?.thread_id;
 
-    if (!threadId) {
-      throw new Error('No thread_id returned from backend');
-    }
+if (!threadId) {
+  throw new Error('No thread_id returned from backend');
+}
 
     // 2️⃣ Store first message & attachments
     sessionStorage.setItem('kinber:firstMessage', trimmed);

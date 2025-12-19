@@ -11,6 +11,7 @@ import ReactDOM from 'react-dom';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowDown } from 'lucide-react';
+import { apiFetch } from '@/lib/api';
 
 import { MessageInput } from '../../../_components/thread/chat-input/message-input';
 import { createThreadInSupabase } from '@/lib/supabase/create-thread';
@@ -220,22 +221,12 @@ function DashboardContent({ threadId }: { threadId?: string }) {
         chatInputRef.current?.focus?.();
         scrollToBottom();
 
-        // Ensure thread exists (PRODUCTION-SAFE)
+        // Ensure thread exists (PRODUCTION-SAFE, UNIFIED)
         let newThreadId = initiatedThreadId || threadId || null;
 
         if (!newThreadId) {
-          const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
-
-          if (!API_BASE) {
-            throw new Error('API base URL not configured');
-          }
-
-          const res = await fetch(`${API_BASE}/api/thread`, {
+          const res = await apiFetch('/api/thread', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            credentials: 'include',
             body: JSON.stringify({
               title: 'New Conversation',
               user_id: 'guest',
@@ -248,7 +239,7 @@ function DashboardContent({ threadId }: { threadId?: string }) {
           }
 
           const data = await res.json();
-          newThreadId = data?.thread_id || null;
+          newThreadId = data?.thread_id;
 
           if (!newThreadId) {
             throw new Error('No thread_id returned from backend');
