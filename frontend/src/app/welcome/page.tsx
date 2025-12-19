@@ -45,39 +45,75 @@ export default function WelcomePage() {
   const [attachments, setAttachments] = useState<any[]>([]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
-  /* -----------------------------------------------------------
-     📨 Handle first message
-  ------------------------------------------------------------ */
-  const handleLocalSubmit = async (message?: string, attachedFiles: any[] = []) => {
-    const trimmed = (message || localInput).trim();
-    if (!trimmed || loading) return;
+/* -----------------------------------------------------------
+   📨 Handle first message (PRODUCTION-SAFE)
+------------------------------------------------------------ */
+const handleLocalSubmit = async (
+  message?: string,
+  attachedFiles: any[] = []
+) => {
+  const trimmed = (message || localInput).trim();
+  if (!trimmed || loading) return;
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      const threadRes = await createThreadInSupabase('New Conversation');
-      const threadId = threadRes?.thread_id;
+  try {
+    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-      if (threadId) {
-        sessionStorage.setItem('kinber:firstMessage', trimmed);
-
-        const toStore = attachedFiles?.length ? attachedFiles : attachments;
-        if (toStore?.length > 0) {
-          sessionStorage.setItem('kinber:firstAttachments', JSON.stringify(toStore));
-        } else {
-          sessionStorage.removeItem('kinber:firstAttachments');
-        }
-
-        router.push(`/dashboard?thread_id=${threadId}`);
-      }
-    } catch (err) {
-      console.error('❌ Error:', err);
-    } finally {
-      setLoading(false);
-      setLocalInput('');
-      setAttachments([]);
+    if (!API_BASE) {
+      throw new Error('API base URL not configured');
     }
-  };
+
+    // 1️⃣ Create thread via BACKEND (not frontend-relative)
+    const res = await fetch(`${API_BASE}/api/thread`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include', // important for prod auth
+      body: JSON.stringify({
+        title: 'New Conversation',
+        user_id: 'guest',
+      }),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Thread creation failed: ${errText}`);
+    }
+
+    const data = await res.json();
+    const threadId = data?.thread_id;
+
+    if (!threadId) {
+      throw new Error('No thread_id returned from backend');
+    }
+
+    // 2️⃣ Store first message & attachments
+    sessionStorage.setItem('kinber:firstMessage', trimmed);
+
+    const toStore = attachedFiles?.length ? attachedFiles : attachments;
+    if (toStore?.length > 0) {
+      sessionStorage.setItem(
+        'kinber:firstAttachments',
+        JSON.stringify(toStore)
+      );
+    } else {
+      sessionStorage.removeItem('kinber:firstAttachments');
+    }
+
+    // 3️⃣ Navigate to dashboard
+    router.push(`/dashboard?thread_id=${threadId}`);
+  } catch (err) {
+    console.error('❌ Error creating thread:', err);
+    alert('Sorry, I couldn’t process that request.');
+  } finally {
+    setLoading(false);
+    setLocalInput('');
+    setAttachments([]);
+  }
+};
+
 
   /* -----------------------------------------------------------
      🌀 UI OUTPUT (Returns come LAST)

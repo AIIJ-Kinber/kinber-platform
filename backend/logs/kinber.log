@@ -1398,3 +1398,31 @@ AttributeError: 'AsyncHttpxClientWrapper' object has no attribute '_state'
 2025-12-19 01:38:44,192 [INFO] HTTP Request: POST https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/messages?columns=%22content%22%2C%22metadata%22%2C%22role%22%2C%22thread_id%22%2C%22attachments%22 "HTTP/2 201 Created"
 2025-12-19 01:38:44,406 [INFO] HTTP Request: PATCH https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?thread_id=eq.82e21765-7d2e-460f-b3eb-c0f25f34d412 "HTTP/2 200 OK"
 2025-12-19 01:38:44,408 [INFO] POST /api/thread/82e21765-7d2e-460f-b3eb-c0f25f34d412/agent/start [200] 6823.23ms
+2025-12-19 01:59:23,754 [INFO] OPTIONS /api/thread/ [200] 0.00ms
+2025-12-19 01:59:24,647 [INFO] HTTP Request: POST https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads "HTTP/2 201 Created"
+2025-12-19 01:59:24,648 [INFO] POST /api/thread/ [200] 892.04ms
+2025-12-19 01:59:25,189 [INFO] OPTIONS /api/thread/28803aeb-fdc3-4893-af4c-0043e79f5af0/agent/start [200] 0.00ms
+2025-12-19 01:59:25,380 [INFO] HTTP Request: GET https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?select=user_id&thread_id=eq.28803aeb-fdc3-4893-af4c-0043e79f5af0 "HTTP/2 200 OK"
+2025-12-19 01:59:25,587 [INFO] HTTP Request: PATCH https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?thread_id=eq.28803aeb-fdc3-4893-af4c-0043e79f5af0 "HTTP/2 409 Conflict"
+2025-12-19 01:59:25,790 [INFO] HTTP Request: GET https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/messages?select=role%2Ccontent%2Ccreated_at&thread_id=eq.28803aeb-fdc3-4893-af4c-0043e79f5af0&order=created_at.asc&limit=8 "HTTP/2 200 OK"
+2025-12-19 01:59:26,094 [INFO] HTTP Request: GET https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/long_term_memory?select=memory_type%2Ccontent%2Cimportance&thread_id=eq.28803aeb-fdc3-4893-af4c-0043e79f5af0&order=importance.desc&limit=10 "HTTP/2 200 OK"
+2025-12-19 01:59:26,276 [INFO] HTTP Request: GET https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?select=summary%2Cmetadata&thread_id=eq.28803aeb-fdc3-4893-af4c-0043e79f5af0 "HTTP/2 200 OK"
+2025-12-19 01:59:26,277 [INFO] GET /api/api/thread/28803aeb-fdc3-4893-af4c-0043e79f5af0/ [404] 0.00ms
+2025-12-19 01:59:26,279 [INFO] GET /api/api/thread/28803aeb-fdc3-4893-af4c-0043e79f5af0/ [404] 0.00ms
+2025-12-19 01:59:30,041 [INFO] HTTP Request: GET https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?select=summary%2Cmetadata&thread_id=eq.28803aeb-fdc3-4893-af4c-0043e79f5af0 "HTTP/2 200 OK"
+2025-12-19 01:59:31,214 [INFO] HTTP Request: PATCH https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?thread_id=eq.28803aeb-fdc3-4893-af4c-0043e79f5af0 "HTTP/2 200 OK"
+2025-12-19 01:59:31,421 [INFO] HTTP Request: POST https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/long_term_memory "HTTP/2 201 Created"
+2025-12-19 01:59:31,726 [INFO] HTTP Request: POST https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/messages?columns=%22content%22%2C%22metadata%22%2C%22role%22%2C%22thread_id%22%2C%22attachments%22 "HTTP/2 201 Created"
+2025-12-19 01:59:31,935 [INFO] HTTP Request: PATCH https://sujntuhrsbnzkbqmlspt.supabase.co/rest/v1/threads?thread_id=eq.28803aeb-fdc3-4893-af4c-0043e79f5af0 "HTTP/2 200 OK"
+2025-12-19 01:59:31,935 [INFO] POST /api/thread/28803aeb-fdc3-4893-af4c-0043e79f5af0/agent/start [200] 6744.37ms
+2025-12-19 11:11:24,203 [INFO] OPTIONS /thread/ [200] 0.00ms
+2025-12-19 11:11:24,207 [INFO] POST /thread/ [404] 1.00ms
+2025-12-19 11:11:40,900 [INFO] POST /thread/ [404] 0.00ms
+2025-12-19 11:11:40,928 [INFO] OPTIONS /thread/null/agent/start [200] 0.00ms
+2025-12-19 11:11:40,930 [INFO] POST /thread/null/agent/start [404] 0.00ms
+2025-12-19 11:11:51,058 [INFO] POST /thread/null/agent/start [404] 0.00ms
+2025-12-19 11:40:31,139 [INFO] OPTIONS /thread/null/agent/start [200] 0.00ms
+2025-12-19 11:40:31,141 [INFO] POST /thread/null/agent/start [404] 0.00ms
+2025-12-19 11:40:41,195 [INFO] OPTIONS /thread/ [200] 0.00ms
+2025-12-19 11:40:41,197 [INFO] POST /thread/ [404] 0.00ms
+2025-12-19 11:47:26,322 [INFO] POST /thread/ [404] 0.00ms

@@ -220,12 +220,42 @@ function DashboardContent({ threadId }: { threadId?: string }) {
         chatInputRef.current?.focus?.();
         scrollToBottom();
 
-        // Ensure thread exists
+        // Ensure thread exists (PRODUCTION-SAFE)
         let newThreadId = initiatedThreadId || threadId || null;
+
         if (!newThreadId) {
-          const threadRes = await createThreadInSupabase('New Conversation');
-          newThreadId = threadRes?.thread_id || null;
+          const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+
+          if (!API_BASE) {
+            throw new Error('API base URL not configured');
+          }
+
+          const res = await fetch(`${API_BASE}/api/thread`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+              title: 'New Conversation',
+              user_id: 'guest',
+            }),
+          });
+
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`Thread creation failed: ${errText}`);
+          }
+
+          const data = await res.json();
+          newThreadId = data?.thread_id || null;
+
+          if (!newThreadId) {
+            throw new Error('No thread_id returned from backend');
+          }
+
           setInitiatedThreadId(newThreadId);
+
           window.history.replaceState(
             {},
             '',
