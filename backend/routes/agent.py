@@ -21,6 +21,17 @@ from backend.routes.agent_actions import (
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
+@router.get("")
+async def agent_root():
+    return {
+        "status": "ok",
+        "service": "agent",
+        "endpoints": [
+            "/api/agent/run",
+            "/api/agent/tool"
+        ]
+    }
+
 
 # ---------------------------------------------------
 # Agent Request Model
@@ -65,7 +76,10 @@ async def run_agent(body: AgentRequest):
         )
 
         final_reply = "\n".join(vision_blocks) + ai_reply
-        return JSONResponse({"status": "success", "reply": final_reply})
+        return {
+    "status": "success",
+    "reply": final_reply
+}
 
     except Exception as e:
         print("❌ Agent route error:", e)
