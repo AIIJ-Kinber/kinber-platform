@@ -180,263 +180,146 @@ function DashboardContent({ threadId }: { threadId?: string }) {
     );
   }, []);
 
-  /* ---------------------------------------------------------
-     MAIN SUBMIT
-  --------------------------------------------------------- */
-  const handleSubmit = useCallback(
-    async (
-      message: string,
-      attachments: UIAttachment[] = [],
-      skipEcho = false
-    ) => {
-      try {
-        const trimmed = message?.trim();
-        if (!trimmed) return;
+/* ---------------------------------------------------------
+   MAIN SUBMIT (PRODUCTION-SAFE)
+--------------------------------------------------------- */
+const handleSubmit = useCallback(
+  async (
+    message: string,
+    attachments: UIAttachment[] = [],
+    skipEcho = false
+  ) => {
+    try {
+      const trimmed = message.trim();
+      if (!trimmed) return;
 
-        setIsSubmitting(true);
-        setIsGenerating(true);
-        hasOptimisticRef.current = true;
+      setIsSubmitting(true);
+      setIsGenerating(true);
+      hasOptimisticRef.current = true;
 
-        const combinedAttachments =
-          attachments.length > 0 ? attachments : attachedFiles;
+      const combinedAttachments =
+        attachments.length > 0 ? attachments : attachedFiles;
 
-        // Echo user's message to UI
-        if (!skipEcho) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: 'user',
-              content: trimmed,
-              isUser: true,
-              attachments: combinedAttachments,
-            },
-          ]);
-        }
+      /* -----------------------------
+         1️⃣ Optimistic user echo
+      ----------------------------- */
+      if (!skipEcho) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'user',
+            content: trimmed,
+            isUser: true,
+            attachments: combinedAttachments,
+          },
+        ]);
+      }
 
-        // Reset attachments
-        setAttachedFiles([]);
-        window.dispatchEvent(new CustomEvent('attachments:cleared'));
+      setAttachedFiles([]);
+      window.dispatchEvent(new CustomEvent('attachments:cleared'));
 
-        setInputValue('');
-        chatInputRef.current?.focus?.();
-        scrollToBottom();
+      setInputValue('');
+      chatInputRef.current?.focus?.();
+      scrollToBottom();
 
-        // Ensure thread exists (PRODUCTION-SAFE, UNIFIED)
-        let newThreadId = initiatedThreadId || threadId || null;
+      /* -----------------------------
+         2️⃣ Ensure thread exists
+      ----------------------------- */
+      let activeThreadId = initiatedThreadId || threadId;
 
-        if (!newThreadId) {
-          const res = await apiFetch('/api/thread', {
-            method: 'POST',
-            body: JSON.stringify({
-              title: 'New Conversation',
-              user_id: 'guest',
-            }),
-          });
-
-          if (!res.ok) {
-            const errText = await res.text();
-            throw new Error(`Thread creation failed: ${errText}`);
-          }
-
-          const data = await res.json();
-          newThreadId = data?.thread_id;
-
-          if (!newThreadId) {
-            throw new Error('No thread_id returned from backend');
-          }
-
-          setInitiatedThreadId(newThreadId);
-
-          window.history.replaceState(
-            {},
-            '',
-            `/dashboard?thread_id=${newThreadId}`
-          );
-        }
-
-          // Build backend payload
-        const payload = {
-          message: trimmed,
-          model_name: 'gemini-2.0-flash-exp',
-          agent: 'default', // ← Always default
-          attachments: combinedAttachments.map((att) => ({
-            name: att.name,
-            url: att.url,
-            type: att.type,
-            size: att.size,
-            base64: att.base64,
-          })),
-        };
-
-        // 🔍 DEBUG: see exactly what we are sending
-        console.log("🚚 Sending payload to backend:", {
-          threadId: newThreadId,
-          attachmentsCount: payload.attachments?.length ?? 0,
-          attachments: payload.attachments.map((a) => ({
-            name: a.name,
-            hasBase64: !!a.base64,
-            url: a.url,
-            type: a.type,
-          })),
+      if (!activeThreadId) {
+        const res = await apiFetch('/api/thread', {
+          method: 'POST',
+          body: JSON.stringify({ title: 'New Conversation' }),
         });
 
-        const res = await fetch(
-          `${backendBase}/thread/${newThreadId}/agent/start`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          }
+        if (!res.ok) {
+          throw new Error(await res.text());
+        }
+
+        const json = await res.json();
+        activeThreadId = json?.thread_id;
+
+        if (!activeThreadId) {
+          throw new Error('Backend did not return thread_id');
+        }
+
+        setInitiatedThreadId(activeThreadId);
+        window.history.replaceState(
+          {},
+          '',
+          `/dashboard?thread_id=${activeThreadId}`
         );
-
-        let aiReply = '';
-        if (res.ok) {
-          const data = await res.json();
-          aiReply =
-            data?.data?.assistant_reply ||
-            data?.assistant_reply ||
-            data?.message ||
-            data?.response ||
-            '';
-        }
-
-        /* ---------------------------------------
-           TOOL-CALL HANDLING
-        --------------------------------------- */
-        let finalReply = aiReply;
-        let toolCall: any = null;
-
-        // Try direct parse
-        try {
-          const parsed = JSON.parse(aiReply);
-          if (parsed?.tool) toolCall = parsed;
-        } catch {}
-
-        // Try extractor fallback
-        if (!toolCall) {
-          const extracted = extractToolJson(aiReply);
-          if (extracted) {
-            try {
-              const parsed = JSON.parse(extracted);
-              if (parsed?.tool) toolCall = parsed;
-            } catch {}
-          }
-        }
-
-        if (toolCall) {
-          let toolResult: any = null;
-
-          /* ----------- 1) Web Search Tool ----------- */
-          if (toolCall.tool === 'websearch') {
-            try {
-              const sRes = await fetch(`${backendBase}/api/actions/search`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  query: toolCall.query,
-                  max_results: toolCall.max_results || 10,
-                }),
-              });
-              const json = await sRes.json();
-              toolResult = json?.data || json;
-            } catch (err) {
-              toolResult = { error: String(err) };
-            }
-          }
-
-          /* ----------- 2) YouTube Tool ----------- */
-          if (
-            toolCall.tool === 'youtube_search' ||
-            toolCall.tool === 'youtube'
-          ) {
-            try {
-              const yRes = await fetch(`${backendBase}/api/actions/youtube`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  query: toolCall.query,
-                  max_results: toolCall.max_results || 5,
-                }),
-              });
-
-              const json = await yRes.json();
-              const raw = json?.data;
-
-              toolResult =
-                raw?.results?.results ||
-                raw?.results ||
-                raw ||
-                json;
-            } catch (err) {
-              toolResult = { error: String(err) };
-            }
-          }
-
-          /* ----------- Send tool result back ----------- */
-          try {
-                    const second = await fetch(
-                      `${backendBase}/thread/${newThreadId}/agent/start`,
-                      {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          message: JSON.stringify({
-                            tool: toolCall.tool,
-                            tool_result: toolResult,
-                          }),
-                          model_name: "gemini-2.0-flash-exp",
-                          agent: "default",
-                          attachments: [], // required even if no files
-                        }),
-                      }
-                    );
-
-                    const j2 = await second.json();
-
-                    finalReply =
-                      j2?.data?.assistant_reply ||
-                      j2?.assistant_reply ||
-                      j2?.message ||
-                      finalReply;
-          } catch (err) {
-                    console.warn("Tool follow-up failed:", err);
-          }
-        }
-
-        // Fallback text
-        aiReply = finalReply || aiReply || 'No response.';
-
-        // Render assistant message
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: aiReply,
-            isUser: false,
-            noBubble: true,
-          },
-        ]);
-
-        hasOptimisticRef.current = false;
-        scrollToBottom();
-      } catch (err) {
-        console.error('❌ Submit error:', err);
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: 'Sorry, I couldn’t process that request.',
-            isUser: false,
-            noBubble: true,
-          },
-        ]);
-      } finally {
-        setIsSubmitting(false);
-        setIsGenerating(false);
       }
-    },
-    [backendBase, threadId, initiatedThreadId, attachedFiles, scrollToBottom]
-  );
+
+      /* -----------------------------
+         3️⃣ Send message to agent
+      ----------------------------- */
+      const payload = {
+        message: trimmed,
+        model_name: 'gemini-2.0-flash-exp',
+        agent: 'default',
+        attachments: combinedAttachments.map((a) => ({
+          name: a.name,
+          type: a.type,
+          size: a.size,
+          url: a.url,
+          base64: a.base64,
+        })),
+      };
+
+      const res = await apiFetch(
+        `/api/thread/${activeThreadId}/agent/start`,
+        {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        }
+      );
+
+      let aiReply = 'No response.';
+
+      if (res.ok) {
+        const data = await res.json();
+        aiReply =
+          data?.data?.assistant_reply ||
+          data?.assistant_reply ||
+          data?.message ||
+          aiReply;
+      }
+
+      /* -----------------------------
+         4️⃣ Render assistant reply
+      ----------------------------- */
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: aiReply,
+          isUser: false,
+          noBubble: true,
+        },
+      ]);
+
+      hasOptimisticRef.current = false;
+      scrollToBottom();
+    } catch (err) {
+      console.error('❌ Submit error:', err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'Sorry, I couldn’t process that request.',
+          isUser: false,
+          noBubble: true,
+        },
+      ]);
+    } finally {
+      setIsSubmitting(false);
+      setIsGenerating(false);
+    }
+  },
+  [apiFetch, threadId, initiatedThreadId, attachedFiles, scrollToBottom]
+);
 
         /* ---------------------------------------------------------
             Global file collector (local + Google Drive)

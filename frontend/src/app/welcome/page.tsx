@@ -1,15 +1,16 @@
 'use client';
-export const dynamic = "force-dynamic";
-export const runtime = "edge";
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
 import React, { useState, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
+
 import { SidebarLeft } from '../../_components/sidebar/sidebar-left';
 import { MessageInput } from '../../_components/thread/chat-input/message-input';
-import { createThreadInSupabase } from '../../lib/supabase/create-thread';
 import { createClient } from '@/lib/supabase/client';
 import { apiFetch } from '@/lib/api';
+
 export default function WelcomePage() {
   const supabase = createClient();
   const router = useRouter();
@@ -38,84 +39,77 @@ export default function WelcomePage() {
   }, [supabase, router]);
 
   /* -----------------------------------------------------------
-     📝 INPUT STATE — Hooks must remain in same order
+     📝 INPUT STATE — Hook order MUST stay stable
   ------------------------------------------------------------ */
   const [loading, setLoading] = useState(false);
   const [localInput, setLocalInput] = useState('');
   const [attachments, setAttachments] = useState<any[]>([]);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
-/* -----------------------------------------------------------
-   📨 Handle first message (PRODUCTION-SAFE)
------------------------------------------------------------- */
-const handleLocalSubmit = async (
-  message?: string,
-  attachedFiles: any[] = []
-) => {
-  const trimmed = (message || localInput).trim();
-  if (!trimmed || loading) return;
+  /* -----------------------------------------------------------
+     📨 Handle first message (BACKEND ONLY)
+  ------------------------------------------------------------ */
+  const handleLocalSubmit = async (
+    message?: string,
+    attachedFiles: any[] = []
+  ) => {
+    const trimmed = (message || localInput).trim();
+    if (!trimmed || loading) return;
 
-  setLoading(true);
+    setLoading(true);
 
-  try {
-    const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
+    try {
+      // 1️⃣ Create thread via backend
+      const res = await apiFetch('/api/thread', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: 'New Conversation',
+        }),
+      });
 
-    if (!API_BASE) {
-      throw new Error('API base URL not configured');
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Thread creation failed: ${errText}`);
+      }
+
+      const data = await res.json();
+      const threadId: string | undefined = data?.thread_id;
+
+      if (!threadId) {
+        throw new Error('Backend did not return thread_id');
+      }
+
+      // 2️⃣ Store first message & attachments for dashboard pickup
+      sessionStorage.setItem('kinber:firstMessage', trimmed);
+
+      const filesToStore =
+        attachedFiles.length > 0 ? attachedFiles : attachments;
+
+      if (filesToStore.length > 0) {
+        sessionStorage.setItem(
+          'kinber:firstAttachments',
+          JSON.stringify(filesToStore)
+        );
+      } else {
+        sessionStorage.removeItem('kinber:firstAttachments');
+      }
+
+      // 3️⃣ Navigate to dashboard
+      router.push(`/dashboard?thread_id=${threadId}`);
+    } catch (err) {
+      console.error('❌ Welcome submit failed:', err);
+      alert('Sorry, I couldn’t process that request.');
+    } finally {
+      setLoading(false);
+      setLocalInput('');
+      setAttachments([]);
     }
-
-// 1️⃣ Create thread via BACKEND (PRODUCTION-SAFE)
-const res = await apiFetch('/api/thread', {
-  method: 'POST',
-  body: JSON.stringify({
-    title: 'New Conversation',
-    user_id: 'guest',
-  }),
-});
-
-if (!res.ok) {
-  const errText = await res.text();
-  throw new Error(`Thread creation failed: ${errText}`);
-}
-
-const data = await res.json();
-const threadId = data?.thread_id;
-
-if (!threadId) {
-  throw new Error('No thread_id returned from backend');
-}
-
-    // 2️⃣ Store first message & attachments
-    sessionStorage.setItem('kinber:firstMessage', trimmed);
-
-    const toStore = attachedFiles?.length ? attachedFiles : attachments;
-    if (toStore?.length > 0) {
-      sessionStorage.setItem(
-        'kinber:firstAttachments',
-        JSON.stringify(toStore)
-      );
-    } else {
-      sessionStorage.removeItem('kinber:firstAttachments');
-    }
-
-    // 3️⃣ Navigate to dashboard
-    router.push(`/dashboard?thread_id=${threadId}`);
-  } catch (err) {
-    console.error('❌ Error creating thread:', err);
-    alert('Sorry, I couldn’t process that request.');
-  } finally {
-    setLoading(false);
-    setLocalInput('');
-    setAttachments([]);
-  }
-};
-
+  };
 
   /* -----------------------------------------------------------
      🌀 UI OUTPUT (Returns come LAST)
   ------------------------------------------------------------ */
 
-  // Still checking session
   if (checkingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#161616] text-gray-100">
@@ -124,17 +118,16 @@ if (!threadId) {
     );
   }
 
-  // Auth failed (redirect already triggered)
   if (!allowed) return null;
 
   return (
     <div className="flex h-screen w-full bg-[#252525] text-gray-100 overflow-hidden">
-      {/* Sidebar appears only for authed users */}
+      {/* Sidebar */}
       <div className="hidden md:flex">
         <SidebarLeft />
       </div>
 
-      {/* Main Centered Area */}
+      {/* Main Area */}
       <div className="flex flex-1 flex-col items-center justify-center px-6">
         <motion.div
           className="flex flex-col items-center justify-center text-center w-full max-w-[750px]"
@@ -156,15 +149,13 @@ if (!threadId) {
             onSubmit={(msg, files) =>
               handleLocalSubmit(msg, files || [])
             }
-            onTranscription={(text) =>
-              setLocalInput(text)
-            }
+            onTranscription={(text) => setLocalInput(text)}
             placeholder="Describe what you need help with..."
             loading={loading}
             disabled={loading}
             isAgentRunning={false}
             onAttachmentsChange={(files) => {
-              // Fix React error: cannot update parent during render of child
+              // avoid state update during render
               Promise.resolve().then(() => setAttachments(files));
             }}
           />
@@ -173,4 +164,3 @@ if (!threadId) {
     </div>
   );
 }
-
