@@ -1,55 +1,66 @@
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
+
 import traceback
 import uuid
-import base64
 from io import BytesIO
+from datetime import datetime
+import base64
 
+# --------------------------------------------------
+# Supabase
+# --------------------------------------------------
 from backend.db.supabase_client import get_supabase
-from backend.utils.file_extractor import extract_attachment_text
-from backend.services.gemini import (
 
+# --------------------------------------------------
+# Gemini services
+# --------------------------------------------------
+from backend.services.gemini import (
     run_gemini_agent,
     analyze_image_with_gemini,
-    generate_short_summary,
 )
 
-router = APIRouter(
-    tags=["Thread"]
-)
+# --------------------------------------------------
+# Attachment text extraction (SAFE PLACEHOLDER)
+# --------------------------------------------------
+def extract_attachment_text(source: Any) -> str:
+    """
+    Placeholder for attachment text extraction.
 
+    - source can be:
+      • BytesIO (raw file bytes)
+      • str (URL or base64)
 
-def clean_attachments(attachments: List[Dict[str, Any]]):
-    cleaned = []
-    for f in attachments:
-        cleaned.append(
-            {
-                "name": f.get("name"),
-                "url": f.get("url"),
-                "type": f.get("type"),
-            }
-        )
-    return cleaned
+    Returns extracted text as string.
+    """
+    # TODO: plug OCR / PDF / DOCX extraction later
+    return ""
+
+# --------------------------------------------------
+# Router
+# --------------------------------------------------
+router = APIRouter(tags=["Thread"])
 
 
 # ────────────────────────────────────────────────
 # MODELS
 # ────────────────────────────────────────────────
 
-
 class ThreadCreate(BaseModel):
     title: str = "New Conversation"
-    user_id: str | None = None
+    user_id: Optional[str] = None
 
 
 class MessageBody(BaseModel):
     model_config = {"protected_namespaces": ()}
+
     message: str
-    model_name: str | None = "gemini-2.0-flash-exp"
-    attachments: List[Dict[str, Any]] | None = None
-    agent: str | None = "default"
+    model_name: Optional[str] = "gemini-2.0-flash-exp"
+    agent: Optional[str] = "default"
+    attachments: Optional[List[Dict[str, Any]]] = []
+
 
 # ────────────────────────────────────────────────
 # CREATE THREAD
@@ -60,99 +71,142 @@ async def create_thread(body: ThreadCreate):
     try:
         print(f"🧵 Creating new thread → title={body.title}, user_id={body.user_id}")
 
-        insert_data = {"title": body.title or "New Conversation"}
+        supabase = get_supabase()  # ✅ REQUIRED
 
+        thread_id = str(uuid.uuid4())
+
+        insert_data = {
+            "id": thread_id,
+            "title": body.title or "New Conversation",
+            "created_at": datetime.utcnow().isoformat(),
+        }
+
+        # Optional user_id (validated)
         if body.user_id:
             try:
-                uuid.UUID(str(body.user_id))
+                uuid.UUID(body.user_id)
                 insert_data["user_id"] = body.user_id
             except ValueError:
-                print(f"⚠️ Invalid user_id skipped: {body.user_id}")
+                print(f"⚠️ Invalid user_id ignored: {body.user_id}")
 
-        data = supabase.table("threads").insert(insert_data).execute()
+        # Get Supabase client ONCE
+        supabase = get_supabase()
 
-        thread_id = (
-            data.data[0].get("thread_id")
-            if data.data and "thread_id" in data.data[0]
-            else data.data[0].get("id")
-        )
+        # Insert thread
+        result = supabase.table("threads").insert(insert_data).execute()
 
-        print(f"✅ Thread stored in Supabase: {thread_id}")
-        return JSONResponse({"status": "success", "thread_id": thread_id})
+        if not result.data:
+            raise Exception("Supabase insert returned no data")
+
+        row = result.data[0]
+        thread_id = row.get("thread_id") or row.get("id")
+
+        if not thread_id:
+            raise Exception("No thread_id found in inserted row")
+
+        print(f"✅ Thread created: {thread_id}")
+        return JSONResponse({"thread_id": thread_id})
 
     except Exception as e:
         print("❌ create_thread error:", e)
         traceback.print_exc()
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
-
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ────────────────────────────────────────────────
 # GET THREAD MESSAGES
 # ────────────────────────────────────────────────
 @router.get("/{thread_id}")
 async def get_thread(thread_id: str):
-    """
-    Fetch all messages for a thread.
-
-    If there are no messages but a thread row exists, we return an empty list.
-    If neither messages nor thread exist, we create a lightweight "recovered" thread.
-    """
     try:
         print(f"📨 Fetching messages for thread: {thread_id}")
 
-        # Validate UUID format; if invalid, return empty messages (prevents 500s)
+        # Validate UUID early
         try:
             uuid.UUID(thread_id)
         except ValueError:
-            print(f"⚠️ Invalid thread_id format → {thread_id}")
             return JSONResponse(
-                {"status": "success", "data": {"thread_id": thread_id, "messages": []}}
+                {"thread_id": thread_id, "messages": []}
             )
 
+
         # Fetch messages
+        supabase = get_supabase()
+
         result = (
-            supabase.table("messages")
+            supabase
+            .table("messages")
             .select("*")
             .eq("thread_id", thread_id)
             .order("created_at", desc=False)
             .execute()
         )
 
-        msgs = result.data or []
+        messages = result.data or []
 
-        # If no messages, ensure the thread exists
-        if not msgs:
-            exists = (
-                supabase.table("threads")
-                .select("*")
-                .eq("thread_id", thread_id)
-                .execute()
-            )
-
-            if not exists.data:
-                print("⚠️ Missing thread → creating recovery record")
-
-                supabase.table("threads").insert(
-                    {
-                        "thread_id": thread_id,
-                        "title": "Recovered Conversation",
-                    }
-                ).execute()
-
-            return JSONResponse(
-                {"status": "success", "data": {"thread_id": thread_id, "messages": []}}
-            )
-
-        print(f"📨 Found {len(msgs)} messages")
         return JSONResponse(
-            {"status": "success", "data": {"thread_id": thread_id, "messages": msgs}}
+            {
+                "thread_id": thread_id,
+                "messages": messages,
+            }
         )
 
     except Exception as e:
-        print(f"❌ get_thread error: {e}")
+        print("❌ get_thread error:", e)
         traceback.print_exc()
-        return JSONResponse({"status": "error", "message": str(e)}, status_code=500)
+        raise HTTPException(status_code=500, detail=str(e))
 
+# ────────────────────────────────────────────────
+# START AGENT RUN
+# ────────────────────────────────────────────────
+@router.post("/{thread_id}/agent/start")
+async def start_agent_run(thread_id: str, body: MessageBody):
+    try:
+        print(f"🤖 Agent start → thread={thread_id}")
+
+        supabase = get_supabase()
+
+                # Save user message
+        supabase = get_supabase()
+
+        supabase.table("messages").insert(
+            {
+                "thread_id": thread_id,
+                "role": "user",
+                "content": body.message,
+                "created_at": datetime.utcnow().isoformat(),
+            }
+        ).execute()
+
+
+        # Run Gemini
+        ai_reply = await run_gemini_agent(
+            body.message,
+            agent=body.agent,
+            model_name=body.model_name,
+        )
+
+        # Save assistant reply
+        supabase = get_supabase()
+
+        supabase.table("messages").insert(
+            {
+                "thread_id": thread_id,
+                "role": "assistant",
+                "content": ai_reply,
+                "created_at": datetime.utcnow().isoformat(),
+            }
+        ).execute()
+
+        return JSONResponse(
+            {
+                "assistant_reply": ai_reply,
+            }
+        )
+
+    except Exception as e:
+        print("❌ agent/start error:", e)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ────────────────────────────────────────────────
 # PROCESS USER MESSAGE (AGENT RUN)
@@ -191,6 +245,8 @@ async def start_agent_run(thread_id: str, request: Request):
             # Short-Term Memory (STM)
             stm_list: List[Dict[str, Any]] = []
             try:
+
+                supabase = get_supabase()
                 history_res = (
                     supabase.table("messages")
                     .select("role, content, created_at")
@@ -199,41 +255,55 @@ async def start_agent_run(thread_id: str, request: Request):
                     .limit(8)
                     .execute()
                 )
+
                 history = history_res.data or []
                 for m in history[-8:]:
                     stm_list.append(
                         {
-                            "role": m.get("role"),
-                            "content": (m.get("content") or "")[:500],
+                            "role": (m.get("role") or "assistant"),
+                            "content": (m.get("content") or ""),
+                            "created_at": m.get("created_at"),
                         }
                     )
             except Exception as e:
                 print("⚠️ STM load failed:", e)
 
+            # ───────────────────────────────
             # Mid-Term Memory (MTM)
+            # ───────────────────────────────
             mtm_value = None
             try:
+                supabase = get_supabase()
                 trow = (
                     supabase.table("threads")
                     .select("summary, metadata")
                     .eq("thread_id", thread_id)
-                    .single()
+                    .limit(1)
                     .execute()
                 )
-                if trow.data:
-                    mtm_value = trow.data.get("summary") or (
-                        (trow.data.get("metadata") or {})
+
+                row = (trow.data or [{}])[0]
+
+                mtm_value = (
+                    row.get("summary")
+                    or (
+                        row.get("metadata", {})
                         .get("memory", {})
                         .get("mid_summary")
-                        if isinstance(trow.data.get("metadata"), dict)
+                        if isinstance(row.get("metadata"), dict)
                         else None
                     )
+                )
+
             except Exception as e:
                 print("⚠️ MTM load failed:", e)
 
+            # ───────────────────────────────
             # Long-Term Memory (LTM)
+            # ───────────────────────────────
             ltm_list: List[Dict[str, Any]] = []
             try:
+                supabase = get_supabase()
                 ltm_res = (
                     supabase.table("long_term_memory")
                     .select("memory_type, content, importance, source, created_at")
@@ -242,7 +312,9 @@ async def start_agent_run(thread_id: str, request: Request):
                     .limit(25)
                     .execute()
                 )
+
                 ltm_list = ltm_res.data or []
+
             except Exception as e:
                 print("⚠️ LTM load failed:", e)
 
@@ -289,19 +361,23 @@ async def start_agent_run(thread_id: str, request: Request):
             )
 
         # ───────────────────────────────
+        # ───────────────────────────────
         # 0️⃣ Load user_id for LTM writing
         # ───────────────────────────────
         user_id = None
         try:
-            thread_info = (
+            supabase = get_supabase()
+            res = (
                 supabase.table("threads")
                 .select("user_id")
                 .eq("thread_id", thread_id)
-                .single()
+                .limit(1)
                 .execute()
             )
-            if thread_info.data:
-                user_id = thread_info.data.get("user_id")
+
+            if res.data and len(res.data) > 0:
+                user_id = res.data[0].get("user_id")
+
         except Exception as e:
             print("⚠️ Failed to load thread user_id:", e)
 
@@ -361,6 +437,8 @@ async def start_agent_run(thread_id: str, request: Request):
         # ───────────────────────────────
         recent_context = ""
         try:
+            supabase = get_supabase()
+
             history_res = (
                 supabase.table("messages")
                 .select("role, content, created_at")
@@ -369,28 +447,42 @@ async def start_agent_run(thread_id: str, request: Request):
                 .limit(8)
                 .execute()
             )
+
             history = history_res.data or []
             lines: List[str] = []
-            for m in history[-8:]:
+
+            for m in history:
                 role = (m.get("role") or "assistant").lower()
                 label = "User" if role == "user" else "Assistant"
                 content = (m.get("content") or "").strip()
+
                 if not content:
                     continue
+
                 if len(content) > 500:
                     content = content[:500] + "…"
+
                 lines.append(f"{label}: {content}")
+
             recent_context = "\n".join(lines)
+
+        except Exception as e:
+            print("⚠️ Failed to load recent messages (STM):", e)
+            recent_context = ""
+
         except Exception as e:
             print("⚠️ Failed to load recent messages:", e)
             recent_context = ""
 
         # ───────────────────────────────
+        # ───────────────────────────────
         # Load Long-Term Memory (LTM)
         # ───────────────────────────────
         ltm_string = ""
         try:
-            ltm_rows = (
+            supabase = get_supabase()
+
+            ltm_res = (
                 supabase.table("long_term_memory")
                 .select("memory_type, content, importance")
                 .eq("thread_id", thread_id)
@@ -399,50 +491,71 @@ async def start_agent_run(thread_id: str, request: Request):
                 .execute()
             )
 
-            items = ltm_rows.data or []
-            if items:
+            ltm_items = ltm_res.data or []
+
+            if ltm_items:
                 lines = ["Long-Term Memory:"]
-                for row in items:
+                for row in ltm_items:
+                    memory_type = row.get("memory_type", "unknown")
+                    importance = row.get("importance", 0)
+                    content = (row.get("content") or "").strip()
+
+                    if not content:
+                        continue
+
+                    if len(content) > 600:
+                        content = content[:600] + "…"
+
                     lines.append(
-                        f"- ({row.get('memory_type')}, {row.get('importance')}): {row.get('content')}"
+                        f"- ({memory_type}, importance={importance}): {content}"
                     )
+
                 ltm_string = "\n".join(lines)
 
-            print("🧠 Loaded LTM entries:", len(items))
+            print(f"🧠 Loaded LTM entries: {len(ltm_items)}")
 
         except Exception as e:
-            print("⚠️ Failed to load long-term memory:", e)
+            print("⚠️ Failed to load long-term memory (LTM):", e)
             ltm_string = ""
 
+        # ───────────────────────────────
         # ───────────────────────────────
         # Load Mid-Term Memory (MTM)
         # ───────────────────────────────
         mid_summary = None
         try:
-            thread_row = (
+            supabase = get_supabase()
+
+            res = (
                 supabase.table("threads")
                 .select("summary, metadata")
                 .eq("thread_id", thread_id)
-                .single()
+                .limit(1)
                 .execute()
             )
 
-            if thread_row.data:
-                thread_summary = thread_row.data.get("summary")
-                thread_meta = thread_row.data.get("metadata") or {}
+            row = (res.data or [None])[0]
+
+            if row:
+                thread_summary = row.get("summary")
+                metadata = row.get("metadata") or {}
 
                 meta_summary = (
-                    thread_meta.get("memory", {}).get("mid_summary")
-                    if isinstance(thread_meta, dict)
+                    metadata.get("memory", {}).get("mid_summary")
+                    if isinstance(metadata, dict)
                     else None
                 )
 
                 mid_summary = meta_summary or thread_summary
 
-                print(f"🧠 MTM loaded: {mid_summary}")
+                if mid_summary:
+                    if len(mid_summary) > 800:
+                        mid_summary = mid_summary[:800] + "…"
+
+                    print("🧠 MTM loaded")
 
         except Exception as e:
-            print("⚠️ Failed to load thread mid-term memory:", e)
+            print("⚠️ Failed to load thread mid-term memory (MTM):", e)
             mid_summary = None
 
         # ───────────────────────────────
@@ -527,15 +640,21 @@ async def start_agent_run(thread_id: str, request: Request):
             if ocr_metadata:
                 print("📝 Saving OCR text to thread metadata...")
 
-                thread_row = (
+                supabase = get_supabase()
+
+                res = (
                     supabase.table("threads")
                     .select("metadata")
                     .eq("thread_id", thread_id)
-                    .single()
+                    .limit(1)
                     .execute()
                 )
 
-                old_meta = thread_row.data.get("metadata") or {}
+                row = (res.data or [None])[0]
+                old_meta = row.get("metadata") if row else {}
+
+                if not isinstance(old_meta, dict):
+                    old_meta = {}
 
                 supabase.table("threads").update(
                     {
@@ -547,6 +666,7 @@ async def start_agent_run(thread_id: str, request: Request):
                 ).eq("thread_id", thread_id).execute()
 
                 print("✅ OCR text stored in thread metadata.")
+
         except Exception as e:
             print("⚠️ Failed to save OCR to metadata:", e)
 
@@ -705,26 +825,35 @@ async def start_agent_run(thread_id: str, request: Request):
         # Rolling Mid-Term Memory Writing
         # ───────────────────────────────
         try:
-            # Load existing MTM
             old_summary = None
-            try:
-                trow = (
-                    supabase.table("threads")
-                    .select("summary, metadata")
-                    .eq("thread_id", thread_id)
-                    .single()
-                    .execute()
+
+            supabase = get_supabase()
+
+            res = (
+                supabase.table("threads")
+                .select("summary, metadata")
+                .eq("thread_id", thread_id)
+                .limit(1)
+                .execute()
+            )
+
+            row = (res.data or [None])[0]
+
+            if row:
+                summary = row.get("summary")
+                metadata = row.get("metadata") or {}
+
+                meta_summary = (
+                    metadata.get("memory", {}).get("mid_summary")
+                    if isinstance(metadata, dict)
+                    else None
                 )
-                if trow.data:
-                    old_summary = trow.data.get("summary") or (
-                        ((trow.data.get("metadata") or {})
-                        .get("memory", {})
-                        .get("mid_summary")
-                        if isinstance(trow.data.get("metadata"), dict)
-                        else None)
-                    )
-            except Exception as e:
-                print("⚠️ Failed to load existing MTM:", e)
+
+                old_summary = meta_summary or summary
+
+        except Exception as e:
+            print("⚠️ Failed to load existing MTM:", e)
+            old_summary = None
 
             # Prepare MTM generation prompt
             mtm_prompt = f"""
@@ -831,7 +960,7 @@ Latest update:
                 "vision": vision_metadata,
                 "summary": short_summary or "",
             }
-
+            supabase = get_supabase()
             supabase.table("messages").insert(
                 [
                     {
@@ -876,3 +1005,17 @@ Latest update:
             {"status": "error", "message": str(e)},
             status_code=500,
         )
+
+def clean_attachments(attachments):
+    """
+    Remove base64 data from attachments before saving to DB.
+    Keeps only name, type, and url fields.
+    """
+    cleaned = []
+    for att in attachments or []:
+        cleaned.append({
+            "name": att.get("name"),
+            "type": att.get("type"),
+            "url": att.get("url"),
+        })
+    return cleaned
