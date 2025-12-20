@@ -7,9 +7,10 @@ import uuid
 import base64
 from io import BytesIO
 
-from backend.db.supabase_client import supabase
+from backend.db.supabase_client import get_supabase
 from backend.utils.file_extractor import extract_attachment_text
 from backend.services.gemini import (
+
     run_gemini_agent,
     analyze_image_with_gemini,
     generate_short_summary,
@@ -54,6 +55,7 @@ class MessageBody(BaseModel):
 # CREATE THREAD
 # ────────────────────────────────────────────────
 @router.post("/")
+@router.post("")
 async def create_thread(body: ThreadCreate):
     try:
         print(f"🧵 Creating new thread → title={body.title}, user_id={body.user_id}")
@@ -657,7 +659,7 @@ async def start_agent_run(thread_id: str, request: Request):
             # -----------------------------------
             elif tool == "youtube_search":
                 try:
-                    from backend.routes.agent_actions import youtube_search_action
+                    from routes.agent_actions import youtube_search_action
 
                     query = tool_call.get("query", "")
                     max_results = tool_call.get("max_results", 5)

@@ -2,16 +2,31 @@
 
 import os
 import jwt
+from jwt import PyJWTError
 from typing import Optional
 
 from fastapi import HTTPException, Depends, Request, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-import sentry_sdk
-from sentry_sdk import capture_exception
+try:
+    import sentry_sdk  # type: ignore
+    from sentry_sdk import capture_exception  # type: ignore
+except ImportError:
+    sentry_sdk = None
+    capture_exception = lambda e: None
+try:
+    import structlog  # type: ignore
+except ImportError:  # pragma: no cover
+    class _DummyStructlog:
+        class contextvars:  # type: ignore
+            @staticmethod
+            def bind_contextvars(**kwargs):
+                return None
 
-from backend.utils.logger import logger
-from backend.utils.config import config
+    structlog = _DummyStructlog()  # type: ignore
+
+from utils.logger import logger
+from utils.config import config
 
 security = HTTPBearer()
 
@@ -106,10 +121,7 @@ async def get_current_user_id_from_jwt(request: Request) -> str:
                 headers={"WWW-Authenticate": "Bearer"}
             )
 
-        sentry.sentry.set_user({ "id": user_id })
-        structlog.contextvars.bind_contextvars(
-            user_id=user_id
-        )
+        sentry_sdk.set_user({ "id": user_id })
         return user_id
         
     except PyJWTError:

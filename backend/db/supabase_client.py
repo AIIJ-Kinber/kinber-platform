@@ -1,19 +1,23 @@
-from supabase import create_client, Client
+# backend/db/supabase_client.py
 import os
-from dotenv import load_dotenv
+from supabase import create_client, Client
 
-# Load .env
-env_path = os.path.join(os.path.dirname(__file__), '..', '.env')
-load_dotenv(dotenv_path=os.path.abspath(env_path))
-
-# ✅ Load server-only Supabase keys
-SUPABASE_URL = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
 
-if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-    raise ValueError("❌ Missing Supabase configuration (URL or Service Role Key).")
+supabase: Client | None = None
 
-print(f"✅ Supabase client initialized for: {SUPABASE_URL}")
+def get_supabase() -> Client:
+    global supabase
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    if supabase:
+        return supabase
 
+    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+        raise RuntimeError("Supabase env vars missing")
+
+    supabase = create_client(
+        SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY,
+    )
+    return supabase

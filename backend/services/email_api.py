@@ -2,9 +2,12 @@ from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import asyncio
-from services.email import email_service
-from utils.logger import logger
-from utils.auth_utils import verify_admin_api_key
+
+# ✅ Correct absolute imports
+from backend.services.email import email_service
+from backend.utils.logger import logger
+from backend.utils.auth_utils import verify_admin_api_key
+
 
 router = APIRouter()
 

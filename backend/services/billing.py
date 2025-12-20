@@ -1,17 +1,29 @@
+
 from fastapi import APIRouter, HTTPException, Depends, Header, Request
 from typing import Optional, Dict, Tuple, List, Any
 from datetime import datetime, timezone
 import time
 
-import paypalrestsdk
+# Optional PayPal SDK
+try:
+    import paypalrestsdk
+except ImportError:
+    paypalrestsdk = None
 
-from utils.logger import logger
-from utils.config import config, EnvMode
-from services.supabase import DBConnection
-from utils.auth_utils import get_current_user_id_from_jwt
 from pydantic import BaseModel
-from utils.constants import MODEL_ACCESS_TIERS, MODEL_NAME_ALIASES
-from litellm import cost_per_token
+
+# ✅ Correct absolute imports
+from backend.utils.logger import logger
+from backend.utils.config import config, EnvMode
+from backend.services.supabase import DBConnection
+from backend.utils.auth_utils import get_current_user_id_from_jwt
+from backend.utils.constants import MODEL_ACCESS_TIERS, MODEL_NAME_ALIASES
+
+# Optional LiteLLM cost helper
+try:
+    from litellm import cost_per_token
+except ImportError:
+    cost_per_token = None
 
 # ─── PayPal SDK setup ────────────────────────────────────────────────────────
 paypalrestsdk.configure({

@@ -16,8 +16,9 @@ import os
 import openai
 from typing import List, Dict, Any, Optional, Union, AsyncGenerator
 
-from backend.utils.logger import logger
-from backend.utils.config import config
+from utils.config import config
+from utils.logger import logger
+from utils.retry import retry
 
 # Configure the OpenAI SDK
 openai.api_key = config.OPENAI_API_KEY

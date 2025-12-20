@@ -1,12 +1,15 @@
 """
 Utility functions for handling image operations.
 """
-from utils.base64_utils import decode_base64
 import base64
 import uuid
 from datetime import datetime
-from utils.logger import logger
-from services.supabase import DBConnection
+
+# ✅ Correct absolute imports
+from backend.utils.base64_utils import decode_base64
+from backend.utils.logger import logger
+from backend.services.supabase import DBConnection
+
 
 async def upload_base64_image(base64_data: str, bucket_name: str = "browser-screenshots") -> str:
     """Upload a base64 encoded image to Supabase storage and return the URL.

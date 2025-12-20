@@ -1,3 +1,6 @@
+# LEGACY FILE (NOT USED) — kept for reference only.
+# Do not import this module from runtime code.
+
 from fastapi import FastAPI, Request, HTTPException, Response, Depends, APIRouter, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -34,9 +37,6 @@ if sys.platform == "win32":
 from backend.utils.logger import logger, structlog
 from backend.services.supabase import DBConnection
 
-# ─── Optional Thread Manager ─────────────────────────────────────────────────
-from backend.agentpress.thread_manager import ThreadManager
-
 # ─── Sub‐API modules ──────────────────────────────────────────────────────────
 from backend.agent import api as agent_api
 # from backend.sandbox import api as sandbox_api
@@ -48,7 +48,7 @@ from backend.triggers import api as triggers_api, unified_oauth_api
 from backend.mcp_service import api as mcp_api
 from backend.mcp_service import secure_api as secure_mcp_api
 from backend.mcp_service import template_api as template_api
-from backend.knowledge_base import api as knowledge_base_api
+from backend.knowledge_base import api as knowledge_base_api  # type: ignore[import]
 from backend.services.playground import router as playground_router
 
 # ─── Shared Resources ─────────────────────────────────────────────────────────
@@ -348,8 +348,8 @@ async def start_agent(thread_id: str, request: Request):
     print(f"🚀 OPTIMIZED ENDPOINT: /thread/{thread_id}/agent/start")
     
     import uuid
-    from services.gemini import generate_response
-    from services.local_executor import local_executor
+    from backend.services.gemini import generate_response
+    from backend.services.local_executor import local_executor
     
     # Parse request body
     body = await request.json()

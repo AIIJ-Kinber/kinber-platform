@@ -3,8 +3,8 @@ Centralized database connection management for AgentPress using Supabase.
 """
 
 from supabase import create_client, Client
-from backend.utils.logger import logger
-from backend.utils.config import config
+from utils.logger import logger
+from utils.config import config
 from typing import Optional
 import base64
 import uuid

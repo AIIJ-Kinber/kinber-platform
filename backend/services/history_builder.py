@@ -11,7 +11,7 @@ retains continuity without forgetting earlier turns.
 """
 
 from typing import List, Dict, Any
-from backend.db.supabase_client import supabase
+from backend.db.supabase_client import get_supabase
 import traceback
 
 

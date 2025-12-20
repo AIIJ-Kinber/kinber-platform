@@ -1426,3 +1426,6 @@ AttributeError: 'AsyncHttpxClientWrapper' object has no attribute '_state'
 2025-12-19 11:40:41,195 [INFO] OPTIONS /thread/ [200] 0.00ms
 2025-12-19 11:40:41,197 [INFO] POST /thread/ [404] 0.00ms
 2025-12-19 11:47:26,322 [INFO] POST /thread/ [404] 0.00ms
+2025-12-20 01:46:45,679 [INFO] GET /api/debug/routes [200] 8.00ms
+2025-12-20 01:46:47,067 [INFO] GET /favicon.ico [404] 0.00ms
+2025-12-20 01:52:18,919 [INFO] GET /api/debug/routes [200] 5.00ms
