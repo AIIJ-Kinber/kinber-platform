@@ -24,15 +24,21 @@ app = FastAPI(
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+
+    # Production domains
     "https://www.kinber.com",
     "https://kinber.com",
+
+    # Vercel preview deployments (optional but recommended)
+    "https://kinber-platform.vercel.app",
+    "https://kinber-platform-git-master-shoukats-projects-b216dfd4.vercel.app",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,   # ❗ NO "*"
-    allow_credentials=True,          # required for Supabase auth
-    allow_methods=["*"],
+    allow_origins=ALLOWED_ORIGINS,   # ❗ NEVER use "*" with credentials
+    allow_credentials=True,          # required for Supabase auth cookies
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
