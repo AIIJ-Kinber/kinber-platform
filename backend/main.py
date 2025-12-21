@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import traceback
 import logging
-import os
 from dotenv import load_dotenv
 
 # ------------------------------------------------------------
@@ -20,12 +19,19 @@ app = FastAPI(
 )
 
 # ------------------------------------------------------------
-# CORS (safe for prod + local)
+# CORS (STRICT + credentials-safe)
 # ------------------------------------------------------------
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://www.kinber.com",
+    "https://kinber.com",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # tighten later
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,   # ❗ NO "*"
+    allow_credentials=True,          # required for Supabase auth
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -47,7 +53,11 @@ async def error_middleware(request: Request, call_next):
         logger.error(traceback.format_exc())
         return JSONResponse(
             status_code=500,
-            content={"error": str(e), "path": request.url.path},
+            content={
+                "status": "error",
+                "message": str(e),
+                "path": request.url.path,
+            },
         )
 
 # ============================================================
@@ -100,7 +110,11 @@ def health():
 def debug_routes():
     return {
         "routes": [
-            {"path": r.path, "methods": list(r.methods), "name": r.name}
+            {
+                "path": r.path,
+                "methods": list(r.methods),
+                "name": r.name,
+            }
             for r in app.router.routes
         ]
     }
