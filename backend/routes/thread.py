@@ -66,22 +66,20 @@ class MessageBody(BaseModel):
 # CREATE THREAD
 # ────────────────────────────────────────────────
 @router.post("/")
-@router.post("")
 async def create_thread(body: ThreadCreate):
     try:
         print(f"🧵 Creating new thread → title={body.title}, user_id={body.user_id}")
 
-        supabase = get_supabase()  # ✅ REQUIRED
+        supabase = get_supabase()
 
         thread_id = str(uuid.uuid4())
 
         insert_data = {
-            "id": thread_id,
+            "thread_id": thread_id,
             "title": body.title or "New Conversation",
             "created_at": datetime.utcnow().isoformat(),
         }
 
-        # Optional user_id (validated)
         if body.user_id:
             try:
                 uuid.UUID(body.user_id)
@@ -89,20 +87,7 @@ async def create_thread(body: ThreadCreate):
             except ValueError:
                 print(f"⚠️ Invalid user_id ignored: {body.user_id}")
 
-        # Get Supabase client ONCE
-        supabase = get_supabase()
-
-        # Insert thread
-        result = supabase.table("threads").insert(insert_data).execute()
-
-        if not result.data:
-            raise Exception("Supabase insert returned no data")
-
-        row = result.data[0]
-        thread_id = row.get("thread_id") or row.get("id")
-
-        if not thread_id:
-            raise Exception("No thread_id found in inserted row")
+        supabase.table("threads").insert(insert_data).execute()
 
         print(f"✅ Thread created: {thread_id}")
         return JSONResponse({"thread_id": thread_id})
