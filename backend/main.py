@@ -5,7 +5,7 @@ import traceback
 import logging
 from dotenv import load_dotenv
 # main.py (root shim for Railway)
-from backend.main import app  # re-export the real FastAPI app
+
 # ------------------------------------------------------------
 # Load environment variables (Railway + local)
 # ------------------------------------------------------------
