@@ -1,10 +1,10 @@
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import traceback
 import logging
 from dotenv import load_dotenv
-# main.py (root shim for Railway)
 
 # ------------------------------------------------------------
 # Load environment variables (Railway + local)
@@ -30,15 +30,15 @@ ALLOWED_ORIGINS = [
     "https://www.kinber.com",
     "https://kinber.com",
 
-    # Vercel preview deployments (optional but recommended)
+    # Vercel preview deployments
     "https://kinber-platform.vercel.app",
     "https://kinber-platform-git-master-shoukats-projects-b216dfd4.vercel.app",
 ]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,   # ❗ NEVER use "*" with credentials
-    allow_credentials=True,          # required for Supabase auth cookies
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
@@ -68,16 +68,13 @@ async def error_middleware(request: Request, call_next):
         )
 
 # ============================================================
-# 🔐 ROUTER MOUNTING — EXPLICIT & RELIABLE
+# 🔐 ROUTER MOUNTING
 # ============================================================
 
-# ---- Thread ------------------------------------------------
-try:
-    from backend.routes.thread import router as thread_router
-    app.include_router(thread_router, prefix="/api/thread", tags=["Thread"])
-    print("✅ Mounted Thread → /api/thread")
-except Exception as e:
-    print("❌ Thread router NOT mounted:", e)
+# ---- Thread (FORCED – NO TRY/EXCEPT) -----------------------
+from backend.routes.thread import router as thread_router
+app.include_router(thread_router, prefix="/api/thread", tags=["Thread"])
+print("✅ Mounted Thread → /api/thread")
 
 # ---- Agent -------------------------------------------------
 try:
@@ -111,7 +108,7 @@ def health():
     return {"status": "ok", "service": "kinber-backend"}
 
 # ============================================================
-# Debug route list (VERY IMPORTANT)
+# Debug route list
 # ============================================================
 @app.get("/api/debug/routes")
 def debug_routes():
