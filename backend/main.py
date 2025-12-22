@@ -72,13 +72,13 @@ async def error_middleware(request: Request, call_next):
 # ============================================================
 
 # ---- Thread (FORCED – NO TRY/EXCEPT) -----------------------
-from backend.routes.thread import router as thread_router
+from .routes.thread import router as thread_router
 app.include_router(thread_router, prefix="/api/thread", tags=["Thread"])
 print("✅ Mounted Thread → /api/thread")
 
 # ---- Agent -------------------------------------------------
 try:
-    from backend.routes.agent import router as agent_router
+    from .routes.agent import router as agent_router
     app.include_router(agent_router, prefix="/api/agent", tags=["Agent"])
     print("✅ Mounted Agent → /api/agent")
 except Exception as e:
@@ -86,7 +86,7 @@ except Exception as e:
 
 # ---- Agent Actions ----------------------------------------
 try:
-    from backend.routes.agent_actions import router as actions_router
+    from .routes.agent_actions import router as actions_router
     app.include_router(actions_router, prefix="/api/actions", tags=["Agent Actions"])
     print("✅ Mounted Agent Actions → /api/actions")
 except Exception as e:
@@ -94,7 +94,7 @@ except Exception as e:
 
 # ---- Tools / Search ---------------------------------------
 try:
-    from backend.routes.search import router as tools_router
+    from .routes.search import router as tools_router
     app.include_router(tools_router, prefix="/api/tools", tags=["Tools"])
     print("✅ Mounted Tools → /api/tools")
 except Exception as e:
