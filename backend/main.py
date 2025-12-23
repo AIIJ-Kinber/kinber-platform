@@ -43,10 +43,10 @@ async def error_middleware(request: Request, call_next):
         )
 
 # ✅ ROUTERS
-from backend.routes.thread import router as thread_router
-from backend.routes.agent import router as agent_router
-from backend.routes.agent_actions import router as actions_router
-from backend.routes.search import router as tools_router
+from routes.thread import router as thread_router
+from routes.agent import router as agent_router
+from routes.agent_actions import router as actions_router
+from routes.search import router as tools_router
 
 app.include_router(thread_router, prefix="/api/thread")
 app.include_router(agent_router, prefix="/api/agent")
