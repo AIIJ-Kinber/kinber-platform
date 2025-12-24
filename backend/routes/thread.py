@@ -12,12 +12,12 @@ import base64
 # --------------------------------------------------
 # Supabase
 # --------------------------------------------------
-from backend.db.supabase_client import get_supabase
+from db.supabase_client import get_supabase
 
 # --------------------------------------------------
 # Gemini services
 # --------------------------------------------------
-from backend.services.gemini import (
+from services.gemini import (
     run_gemini_agent,
     analyze_image_with_gemini,
 )
@@ -745,7 +745,7 @@ async def start_agent_run(thread_id: str, request: Request):
             # -----------------------------------
             if tool == "websearch":
                 try:
-                    from backend.routes.agent_actions import search_web
+                    from routes.agent_actions import search_web
 
                     query = tool_call.get("query", "")
                     max_results = tool_call.get("max_results", 10)
@@ -855,7 +855,7 @@ Latest update:
             # Use Gemini to create rolling MTM
             new_mtm = ""
             try:
-                from backend.services.gemini import _get_model
+                from services.gemini import _get_model
                 import google.generativeai as genai
                 import asyncio
 

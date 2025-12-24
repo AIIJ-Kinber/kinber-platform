@@ -6,14 +6,14 @@ from pydantic import BaseModel
 from typing import Any, Dict, List
 
 # Gemini core agent functions
-from backend.services.gemini import ( run_gemini_agent,
+from services.gemini import ( run_gemini_agent,
     analyze_image_with_gemini,
     format_for_agent_search_block
 )
 
 # Tool services
-from backend.services.web_search import web_search
-from backend.routes.agent_actions import ( youtube_search_action,
+from services.web_search import web_search
+from routes.agent_actions import ( youtube_search_action,
     search_web
 )
 
