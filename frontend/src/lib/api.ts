@@ -34,6 +34,13 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
   const base = getApiBase();
   const finalPath = path.startsWith("/") ? path : `/${path}`;
 
+  // ✅ TEMP DEBUG (remove later)
+  console.log("API FETCH →", {
+    base,
+    finalPath,
+    fullUrl: `${base}${finalPath}`,
+  });
+
   return fetch(`${base}${finalPath}`, {
     ...init,
     credentials: "include",
@@ -43,4 +50,5 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
     },
   });
 }
+
 
