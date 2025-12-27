@@ -2,8 +2,8 @@
 
 export function getApiBase(): string {
   // Prefer ONE variable: NEXT_PUBLIC_API_BASE_URL
-  // Example value:
-  //   https://kinber-platform-production.up.railway.app
+  // Example:
+  //   https://www.kinber.com
   const envBase =
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
@@ -20,10 +20,14 @@ export function getApiBase(): string {
     return "http://127.0.0.1:8000";
   }
 
-  // ❌ Production must not silently fallback (causes your exact bug)
-  throw new Error(
-    "API base URL not configured. Set NEXT_PUBLIC_API_BASE_URL in Vercel."
+  // ✅ Production fallback (SAFE)
+  // Prevents "Failed to fetch" crashes
+  console.warn(
+    "⚠️ NEXT_PUBLIC_API_BASE_URL not set. Falling back to same-origin."
   );
+
+  // This works because frontend + backend are on same domain (kinber.com)
+  return "";
 }
 
 export async function apiFetch(path: string, init: RequestInit = {}) {
@@ -39,3 +43,4 @@ export async function apiFetch(path: string, init: RequestInit = {}) {
     },
   });
 }
+
