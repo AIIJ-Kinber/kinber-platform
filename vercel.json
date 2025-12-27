@@ -1,3 +1,8 @@
 {
-  "framework": "nextjs"
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://kinber-platform-production.up.railway.app/api/:path*"
+    }
+  ]
 }
