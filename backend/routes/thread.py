@@ -65,6 +65,7 @@ class MessageBody(BaseModel):
 # ────────────────────────────────────────────────
 # CREATE THREAD
 # ────────────────────────────────────────────────
+@router.post("")
 @router.post("/")
 async def create_thread(body: ThreadCreate):
     try:
@@ -144,35 +145,39 @@ async def get_thread(thread_id: str):
 # START AGENT RUN
 # ────────────────────────────────────────────────
 @router.post("/{thread_id}/agent/start")
-async def start_agent_run(thread_id: str, body: MessageBody):
+async def start_agent_run(thread_id: str, request: Request):
     try:
-        print(f"🤖 Agent start → thread={thread_id}")
+        body = await request.json()
+
+        message = body.get("message", "").strip()
+        model_name = body.get("model_name", "gemini-2.0-flash-exp")
+        agent = body.get("agent", "default")
+        attachments = body.get("attachments", []) or []
+
+        print(f"\n🚀 Agent Start → thread={thread_id}")
+        print(f"💬 User message: {message}")
+        print(f"📎 Attachments received: {len(attachments)}")
 
         supabase = get_supabase()
 
-                # Save user message
-        supabase = get_supabase()
-
+        # ── Save user message ──────────────────────
         supabase.table("messages").insert(
             {
                 "thread_id": thread_id,
                 "role": "user",
-                "content": body.message,
+                "content": message,
                 "created_at": datetime.utcnow().isoformat(),
             }
         ).execute()
 
-
-        # Run Gemini
+        # ── Run Gemini agent ───────────────────────
         ai_reply = await run_gemini_agent(
-            body.message,
-            agent=body.agent,
-            model_name=body.model_name,
+            message,
+            agent=agent,
+            model_name=model_name,
         )
 
-        # Save assistant reply
-        supabase = get_supabase()
-
+        # ── Save assistant reply ───────────────────
         supabase.table("messages").insert(
             {
                 "thread_id": thread_id,
@@ -182,33 +187,14 @@ async def start_agent_run(thread_id: str, body: MessageBody):
             }
         ).execute()
 
-        return JSONResponse(
-            {
-                "assistant_reply": ai_reply,
-            }
-        )
+        return {
+            "assistant_reply": ai_reply,
+        }
 
     except Exception as e:
         print("❌ agent/start error:", e)
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
-# ────────────────────────────────────────────────
-# PROCESS USER MESSAGE (AGENT RUN)
-# ────────────────────────────────────────────────
-@router.post("/{thread_id}/agent/start")
-async def start_agent_run(thread_id: str, request: Request):
-    try:
-        body = await request.json()
-
-        message = body.get("message", "").strip()
-        model_name = body.get("model_name", "gemini-2.0-flash-exp")
-        attachments = body.get("attachments", []) or []
-        agent = body.get("agent", "default")
-
-        print(f"\n🚀 Agent Start → thread={thread_id}")
-        print(f"💬 User message: {message}")
-        print(f"📎 Attachments received: {len(attachments)}")
 
         # ───────────────────────────────
         # 🧠 Static Memory Report Command
