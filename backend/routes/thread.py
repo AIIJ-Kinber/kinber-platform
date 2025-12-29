@@ -169,6 +169,10 @@ async def start_agent_run(thread_id: str, request: Request):
                 "created_at": datetime.utcnow().isoformat(),
             }
         ).execute()
+        # 🔄 Touch thread updated_at
+        supabase.table("threads").update(
+            {"updated_at": datetime.utcnow().isoformat()}
+        ).eq("thread_id", thread_id).execute()
 
         # ── Run Gemini agent ───────────────────────
         ai_reply = await run_gemini_agent(
