@@ -53,6 +53,12 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
     avatar: '',
   });
 
+  const closeAllModals = () => {
+  setShowSearchModal(false);
+  setShowChatHistory(false);
+  setShowCredentials(false);
+  };
+
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showChatHistory, setShowChatHistory] = useState(false);
   const [showCredentials, setShowCredentials] = useState(false);
@@ -155,14 +161,44 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
 
           {/* Main */}
           <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-            <SidebarItem icon={Search} label="Search Chat" onClick={() => setShowSearchModal(true)} />
-            <SidebarItem icon={Shield} label="Chat History" onClick={() => setShowChatHistory(true)} />
-            <SidebarItem icon={Key} label="Credentials" onClick={() => setShowCredentials(true)} />
-            <SidebarItem icon={Home} label="Home" onClick={() => router.push('/')} />
+            <SidebarItem
+              icon={Search}
+              label="Search Chat"
+              onClick={() => {
+                closeAllModals();
+                setShowSearchModal(true);
+              }}
+            />
+
+            <SidebarItem
+              icon={Shield}
+              label="Chat History"
+              onClick={() => {
+                closeAllModals();
+                setShowChatHistory(true);
+              }}
+            />
+
+            <SidebarItem
+              icon={Key}
+              label="Credentials"
+              onClick={() => {
+                closeAllModals();
+                setShowCredentials(true);
+              }}
+            />
+
+            <SidebarItem
+              icon={Home}
+              label="Home"
+              onClick={() => router.push('/')}
+            />
 
             {state !== 'collapsed' && (
               <div className="mt-5">
-                <div className="text-xs uppercase text-gray-400 mb-2">Recents</div>
+                <div className="text-xs uppercase text-gray-400 mb-2">
+                  Recents
+                </div>
                 {recents.map((t) => (
                   <RecentItem
                     key={t.thread_id}
@@ -204,12 +240,29 @@ export function SidebarLeft(props: React.ComponentProps<typeof Sidebar>) {
         </Sidebar>
       </SidebarProvider>
 
-      {/* Global Modals */}
-      {showSearchModal && <SearchChatModal isOpen onClose={() => setShowSearchModal(false)} />}
-      {showChatHistory && <ChatHistoryModal isOpen onClose={() => setShowChatHistory(false)} />}
-      {showCredentials && <CredentialsModal isOpen onClose={() => setShowCredentials(false)} />}
-    </>
-  );
+          {/* Global Modals */}
+          {showSearchModal && (
+            <SearchChatModal
+              isOpen
+              onClose={closeAllModals}
+            />
+          )}
+
+          {showChatHistory && (
+            <ChatHistoryModal
+              isOpen
+              onClose={closeAllModals}
+            />
+          )}
+
+          {showCredentials && (
+            <CredentialsModal
+              isOpen
+              onClose={closeAllModals}
+            />
+          )}
+        </>
+      );
 }
 
 /* ────────────────────────────────────────────────
