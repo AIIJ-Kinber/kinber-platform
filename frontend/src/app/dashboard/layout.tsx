@@ -76,6 +76,7 @@ export default function DashboardLayout({
   // -------------------------------------------------------
   return (
     <ClientLayout>
+      <div id="modal-root" />
       <div className="relative flex h-screen w-full bg-[#161616] text-gray-100 overflow-hidden">
 
         {/* Sidebar */}

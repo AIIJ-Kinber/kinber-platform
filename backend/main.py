@@ -5,13 +5,22 @@ import traceback
 import logging
 from dotenv import load_dotenv
 
+# ------------------------------------------------------------
+# Load environment variables
+# ------------------------------------------------------------
 load_dotenv()
 
+# ------------------------------------------------------------
+# App initialization
+# ------------------------------------------------------------
 app = FastAPI(
     title="Kinber Backend",
     version="1.0.0",
 )
 
+# ------------------------------------------------------------
+# CORS
+# ------------------------------------------------------------
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -28,9 +37,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ------------------------------------------------------------
+# Logging
+# ------------------------------------------------------------
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("kinber")
 
+# ------------------------------------------------------------
+# Global error handler
+# ------------------------------------------------------------
 @app.middleware("http")
 async def error_middleware(request: Request, call_next):
     try:
@@ -39,20 +54,25 @@ async def error_middleware(request: Request, call_next):
         logger.error(traceback.format_exc())
         return JSONResponse(
             status_code=500,
-            content={"error": str(e)}
+            content={"error": str(e)},
         )
 
-# ✅ ROUTERS
-from routes.thread import router as thread_router
-from routes.agent import router as agent_router
-from routes.agent_actions import router as actions_router
-from routes.search import router as tools_router
+# ============================================================
+# ROUTERS (✅ FIXED IMPORTS)
+# ============================================================
+from backend.routes.thread import router as thread_router
+from backend.routes.agent import router as agent_router
+from backend.routes.agent_actions import router as actions_router
+from backend.routes.search import router as tools_router
 
-app.include_router(thread_router, prefix="/api/thread")
-app.include_router(agent_router, prefix="/api/agent")
-app.include_router(actions_router, prefix="/api/actions")
-app.include_router(tools_router, prefix="/api/tools")
+app.include_router(thread_router, prefix="/api/thread", tags=["Thread"])
+app.include_router(agent_router, prefix="/api/agent", tags=["Agent"])
+app.include_router(actions_router, prefix="/api/actions", tags=["Actions"])
+app.include_router(tools_router, prefix="/api/tools", tags=["Tools"])
 
+# ------------------------------------------------------------
+# Health check
+# ------------------------------------------------------------
 @app.get("/api/health")
 def health():
     return {"status": "ok"}

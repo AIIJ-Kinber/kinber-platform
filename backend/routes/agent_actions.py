@@ -5,7 +5,7 @@ import traceback
 import logging
 
 # Core agent logic
-from core.agents import info_tasks
+from backend.core.agents import info_tasks
 
 # Router
 router = APIRouter(tags=["Agent Actions"])
@@ -98,7 +98,7 @@ def format_search_results(query: str, max_results: int, raw_results):
 # ------------------------------------------------------------
 # /search → Tavily Web Search
 # ------------------------------------------------------------
-from services.tavily import tavily_search
+from backend.services.tavily import tavily_search
 
 @router.post("/search")
 async def search_web(body: dict, internal_call: bool = False):
@@ -130,7 +130,7 @@ async def search_web(body: dict, internal_call: bool = False):
 # ------------------------------------------------------------
 # /youtube → Serper YouTube Search
 # ------------------------------------------------------------
-from services.youtube_search import youtube_search
+from backend.services.youtube_search import youtube_search
 
 @router.post("/youtube")
 async def youtube_search_action(body: dict):

@@ -12,12 +12,12 @@ import base64
 # --------------------------------------------------
 # Supabase
 # --------------------------------------------------
-from db.supabase_client import get_supabase
+from backend.db.supabase_client import get_supabase
 
 # --------------------------------------------------
 # Gemini services
 # --------------------------------------------------
-from services.gemini import (
+from backend.services.gemini import (
     run_gemini_agent,
     analyze_image_with_gemini,
 )
@@ -845,7 +845,7 @@ Latest update:
             # Use Gemini to create rolling MTM
             new_mtm = ""
             try:
-                from services.gemini import _get_model
+                from backend.services.gemini import _get_model
                 import google.generativeai as genai
                 import asyncio
 

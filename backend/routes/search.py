@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from services.web_search import web_search
+from backend.services.web_search import web_search
 
 router = APIRouter()
 

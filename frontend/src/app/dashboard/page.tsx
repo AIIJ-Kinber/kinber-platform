@@ -1,23 +1,32 @@
 'use client';
 
 export const dynamic = "force-dynamic";
-export const runtime = "edge";
 
-import { createClient } from '@/lib/supabase/client';
 import { Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useSearchParams, useRouter } from 'next/navigation';
+
 import { Skeleton } from '@/_components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import DashboardContent from './_components/dashboard-content';
 
+// ✅ Sidebar modals (URL-driven)
+import { SearchChatModal } from '@/_components/sidebar/search-chat-modal';
+import { ChatHistoryModal } from '@/_components/sidebar/chat-history-modal';
+import { CredentialsModal } from '@/_components/sidebar/credentials-modal';
+
 export default function DashboardPage() {
   const searchParams = useSearchParams();
-  const threadId = searchParams?.get('thread_id');
-  const supabase = createClientComponentClient();
+  const router = useRouter();
+
+  const threadId = searchParams?.get('thread_id') ?? undefined;
+  const modal = searchParams?.get('modal');
+
+  const closeModal = () => {
+    router.replace('/dashboard');
+  };
 
   return (
-    <div className="relative flex h-screen w-full bg-[#212121] text-gray-100 overflow-hidden">
+    <div className="relative flex h-screen w-full bg-[#212121] text-gray-100">
       <Suspense
         fallback={
           <div className="flex flex-col h-full w-full">
@@ -39,9 +48,25 @@ export default function DashboardPage() {
           </div>
         }
       >
-        {/* ✅ Pass threadId to your main dashboard content */}
-        <DashboardContent threadId={threadId ?? undefined} />
+        {/* ✅ Main dashboard content */}
+        <DashboardContent threadId={threadId} />
       </Suspense>
+
+      {/* ────────────────────────────────────────────────
+          URL-driven Modals (SAFE, NO FREEZE)
+         ──────────────────────────────────────────────── */}
+      {modal === 'search' && (
+        <SearchChatModal isOpen onClose={closeModal} />
+      )}
+
+      {modal === 'history' && (
+        <ChatHistoryModal isOpen onClose={closeModal} />
+      )}
+
+      {modal === 'credentials' && (
+        <CredentialsModal isOpen onClose={closeModal} />
+      )}
     </div>
   );
 }
+
