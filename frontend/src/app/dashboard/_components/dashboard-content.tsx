@@ -225,7 +225,9 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
 
           const json = await res.json();
           activeThreadId = json?.thread_id;
-          setInitiatedThreadId(activeThreadId);
+          if (typeof activeThreadId === 'string') {
+            setInitiatedThreadId(activeThreadId);
+          }
 
           window.history.replaceState(
             {},
