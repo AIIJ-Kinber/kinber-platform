@@ -209,7 +209,7 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
         scrollToBottom();
 
         // Ensure thread exists
-        let activeThreadId = initiatedThreadId || threadId;
+        let activeThreadId: string | null = initiatedThreadId || threadId || null;
 
         if (!activeThreadId) {
           const { data } = await supabase.auth.getUser();
@@ -219,20 +219,26 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
             method: 'POST',
             body: JSON.stringify({
               title: 'New Conversation',
-              user_id: user?.id || null,
+              user_id: user?.id ?? null,
             }),
           });
 
           const json = await res.json();
-          activeThreadId = json?.thread_id;
-          if (typeof activeThreadId === 'string') {
-            setInitiatedThreadId(activeThreadId);
+
+          const newThreadId =
+            typeof json?.thread_id === 'string' ? json.thread_id : null;
+
+          if (!newThreadId) {
+            throw new Error('Invalid thread_id returned from backend');
           }
+
+          activeThreadId = newThreadId;
+          setInitiatedThreadId(newThreadId);
 
           window.history.replaceState(
             {},
             '',
-            `/dashboard?thread_id=${activeThreadId}`
+            `/dashboard?thread_id=${newThreadId}`
           );
         }
 
