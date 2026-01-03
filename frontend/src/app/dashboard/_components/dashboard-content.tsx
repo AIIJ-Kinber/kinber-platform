@@ -14,7 +14,7 @@ import { ArrowDown } from 'lucide-react';
 import { apiFetch } from '@/lib/api';
 
 import { MessageInput } from '../../../_components/thread/chat-input/message-input';
-import { createThreadInSupabase } from '@/lib/supabase/create-thread';
+import { createClient } from '@/lib/supabase/client';
 
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -22,17 +22,7 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 
 /* ---------------------------------------------------------
-   TOOL JSON EXTRACTOR
---------------------------------------------------------- */
-function extractToolJson(text: string): string | null {
-  if (!text) return null;
-  const regex = /\{[\s\S]*?"tool"\s*:\s*".+?"[\s\S]*?\}/g;
-  const matches = text.match(regex);
-  return matches?.[0] || null;
-}
-
-/* ---------------------------------------------------------
-   MARKDOWN RENDERER
+   MARKDOWN RENDERER (Enhanced from Version B)
 --------------------------------------------------------- */
 function RenderMarkdown({ text }: { text: string }) {
   return (
@@ -131,15 +121,15 @@ type UIMessage = {
 /* ---------------------------------------------------------
    MAIN COMPONENT
 --------------------------------------------------------- */
-function DashboardContent({ threadId }: { threadId?: string }) {
+export default function DashboardContent({ threadId }: { threadId?: string }) {
+  const supabase = createClient();
+
   /* ---------- State ---------- */
   const [inputValue, setInputValue] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [messages, setMessages] = useState<UIMessage[]>([]);
-  const [initiatedThreadId, setInitiatedThreadId] = useState<string | null>(
-    null
-  );
+  const [initiatedThreadId, setInitiatedThreadId] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<UIAttachment[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
 
@@ -147,11 +137,7 @@ function DashboardContent({ threadId }: { threadId?: string }) {
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const hasOptimisticRef = useRef(false);
-
-  const firstMsgRef = useRef<string | null>(null);
-  const isSubmittingFirstMsg = useRef(false);
-  const hasScrolledToFirstMsg = useRef(false);
+  const isSendingRef = useRef(false);
 
   /* ---------- Backend Base ---------- */
   const backendBase = useMemo(() => {
@@ -167,319 +153,222 @@ function DashboardContent({ threadId }: { threadId?: string }) {
   }, []);
 
   /* ---------------------------------------------------------
-     HELPER: Scroll to bottom
+     Scroll helper
   --------------------------------------------------------- */
   const scrollToBottom = useCallback(() => {
-    setTimeout(
-      () =>
-        bottomRef.current?.scrollIntoView({
-          behavior: 'smooth',
-          block: 'end',
-        }),
-      120
-    );
+    setTimeout(() => {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }, 100);
   }, []);
 
-/* ---------------------------------------------------------
-   MAIN SUBMIT (PRODUCTION-SAFE)
---------------------------------------------------------- */
-const handleSubmit = useCallback(
-  async (
-    message: string,
-    attachments: UIAttachment[] = [],
-    skipEcho = false
-  ) => {
-    try {
+  /* ---------------------------------------------------------
+     MAIN SUBMIT (MERGED - AI responses from A + attachment handling from B)
+  --------------------------------------------------------- */
+  const handleSubmit = useCallback(
+    async (message: string, attachments: UIAttachment[] = [], skipEcho = false) => {
       const trimmed = message.trim();
-      if (!trimmed) return;
+      if (!trimmed || isSendingRef.current) return;
 
+      isSendingRef.current = true;
       setIsSubmitting(true);
       setIsGenerating(true);
-      hasOptimisticRef.current = true;
 
+      // 🔥 CRITICAL: Use attachments parameter if provided, otherwise use state
       const combinedAttachments =
         attachments.length > 0 ? attachments : attachedFiles;
 
-      /* -----------------------------
-         1️⃣ Optimistic user echo
-      ----------------------------- */
-      if (!skipEcho) {
+      console.log('📎 SUBMIT - Combined attachments:', combinedAttachments);
+      console.log('📎 SUBMIT - Detailed attachment structure:', 
+        combinedAttachments.map((f, idx) => ({
+          index: idx,
+          name: f.name,
+          url: f.url,
+          type: f.type,
+          size: f.size,
+          hasBase64: !!f.base64,
+          base64Length: f.base64?.length || 0,
+          allKeys: Object.keys(f)
+        }))
+      );
+
+      try {
+        // Echo user message
+        if (!skipEcho) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              role: 'user',
+              content: trimmed,
+              isUser: true,
+              attachments: combinedAttachments,
+            },
+          ]);
+        }
+
+        setInputValue('');
+        scrollToBottom();
+
+        // Ensure thread exists
+        let activeThreadId = initiatedThreadId || threadId;
+
+        if (!activeThreadId) {
+          const { data } = await supabase.auth.getUser();
+          const user = data?.user;
+
+          const res = await apiFetch('/api/thread', {
+            method: 'POST',
+            body: JSON.stringify({
+              title: 'New Conversation',
+              user_id: user?.id || null,
+            }),
+          });
+
+          const json = await res.json();
+          activeThreadId = json?.thread_id;
+          setInitiatedThreadId(activeThreadId);
+
+          window.history.replaceState(
+            {},
+            '',
+            `/dashboard?thread_id=${activeThreadId}`
+          );
+        }
+
+        // 🔥 Build payload with attachments
+        const payload = {
+          message: trimmed,
+          model_name: 'gemini-2.0-flash-exp',
+          agent: 'default',
+          attachments: combinedAttachments.map((f) => {
+            // Extract base64 data (could be in 'base64' or 'data' field)
+            let base64Data = f.base64 || (f as any).data || null;
+            
+            // If base64 exists but doesn't have data URI prefix, add it
+            if (base64Data && !base64Data.startsWith('data:')) {
+              base64Data = `data:${f.type || 'application/octet-stream'};base64,${base64Data}`;
+            }
+            
+            return {
+              name: f.name,
+              url: f.url,
+              type: f.type,
+              size: f.size,
+              base64: base64Data,
+            };
+          }),
+        };
+
+        console.log('🚀 Sending payload to backend:', payload);
+        console.log('📦 Attachments in payload:', JSON.stringify(payload.attachments, null, 2));
+
+        // Call backend
+        const agentRes = await apiFetch(
+          `/api/thread/${activeThreadId}/agent/start`,
+          {
+            method: 'POST',
+            body: JSON.stringify(payload),
+          }
+        );
+
+        let aiReply = 'No response.';
+        if (agentRes.ok) {
+          const data = await agentRes.json();
+          aiReply =
+            data?.assistant_reply ||
+            data?.data?.assistant_reply ||
+            data?.message ||
+            aiReply;
+        } else {
+          console.error('❌ Backend error:', await agentRes.text());
+        }
+
+        // Add AI response
         setMessages((prev) => [
           ...prev,
           {
-            role: 'user',
-            content: trimmed,
-            isUser: true,
-            attachments: combinedAttachments,
+            role: 'assistant',
+            content: aiReply,
+            isUser: false,
+            noBubble: true,
           },
         ]);
+
+        // ✅ CLEAR ATTACHMENTS ONLY AFTER SUCCESSFUL SEND
+        setAttachedFiles([]);
+        
+        // ✅ Dispatch clear event for MessageInput component
+        window.dispatchEvent(new CustomEvent('attachments:cleared'));
+        
+        scrollToBottom();
+      } catch (err) {
+        console.error('❌ Submit error:', err);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            content: 'Sorry, I could not process that request.',
+            isUser: false,
+            noBubble: true,
+          },
+        ]);
+      } finally {
+        setIsSubmitting(false);
+        setIsGenerating(false);
+        isSendingRef.current = false;
       }
-
-      setAttachedFiles([]);
-      window.dispatchEvent(new CustomEvent('attachments:cleared'));
-
-      setInputValue('');
-      chatInputRef.current?.focus?.();
-      scrollToBottom();
-
-      /* -----------------------------
-         2️⃣ Ensure thread exists
-      ----------------------------- */
-      let activeThreadId = initiatedThreadId || threadId;
-
-      if (!activeThreadId) {
-        const res = await apiFetch('/api/thread', {
-          method: 'POST',
-          body: JSON.stringify({ title: 'New Conversation' }),
-        });
-
-        if (!res.ok) {
-          throw new Error(await res.text());
-        }
-
-        const json = await res.json();
-        activeThreadId = json?.thread_id;
-
-        if (!activeThreadId) {
-          throw new Error('Backend did not return thread_id');
-        }
-
-        setInitiatedThreadId(activeThreadId);
-        window.history.replaceState(
-          {},
-          '',
-          `/dashboard?thread_id=${activeThreadId}`
-        );
-      }
-
-      /* -----------------------------
-         3️⃣ Send message to agent
-      ----------------------------- */
-      const payload = {
-        message: trimmed,
-        model_name: 'gemini-2.0-flash-exp',
-        agent: 'default',
-        attachments: combinedAttachments.map((a) => ({
-          name: a.name,
-          type: a.type,
-          size: a.size,
-          url: a.url,
-          base64: a.base64,
-        })),
-      };
-
-      const res = await apiFetch(
-        `/api/thread/${activeThreadId}/agent/start`,
-        {
-          method: 'POST',
-          body: JSON.stringify(payload),
-        }
-      );
-
-      let aiReply = 'No response.';
-
-      if (res.ok) {
-        const data = await res.json();
-        aiReply =
-          data?.data?.assistant_reply ||
-          data?.assistant_reply ||
-          data?.message ||
-          aiReply;
-      }
-
-      /* -----------------------------
-         4️⃣ Render assistant reply
-      ----------------------------- */
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: aiReply,
-          isUser: false,
-          noBubble: true,
-        },
-      ]);
-
-      hasOptimisticRef.current = false;
-      scrollToBottom();
-    } catch (err) {
-      console.error('❌ Submit error:', err);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'Sorry, I couldn’t process that request.',
-          isUser: false,
-          noBubble: true,
-        },
-      ]);
-    } finally {
-      setIsSubmitting(false);
-      setIsGenerating(false);
-    }
-  },
-  [apiFetch, threadId, initiatedThreadId, attachedFiles, scrollToBottom]
-);
-
-        /* ---------------------------------------------------------
-            Global file collector (local + Google Drive)
-        --------------------------------------------------------- */
-        useEffect(() => {
-            const handleFileAttached = (e: any) => {
-                const file = e.detail;
-                if (!file) return;
-
-                console.log("📎 File received in dashboard-content:", file);
-
-                setAttachedFiles((prev) => [...prev, file]);
-            };
-
-            window.addEventListener("file:attached", handleFileAttached);
-            return () => window.removeEventListener("file:attached", handleFileAttached);
-        }, []);
-
-  // Scroll button
-  useEffect(() => {
-    const container = chatContainerRef.current;
-    if (!container) return;
-    const handle = () => {
-      const dist =
-        container.scrollHeight -
-        container.scrollTop -
-        container.clientHeight;
-      setShowScrollButton(dist > 200);
-    };
-    container.addEventListener('scroll', handle);
-    handle();
-    return () => container.removeEventListener('scroll', handle);
-  }, []);
-
-  // Load thread messages
-  useEffect(() => {
-    const loadMessages = async () => {
-      const tid =
-        initiatedThreadId ||
-        threadId ||
-        new URLSearchParams(window.location.search).get('thread_id');
-
-      if (!tid) return;
-
-      // Skip non-UUID inputs
-      const uuid =
-        /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
-      if (!uuid.test(tid)) return;
-
-      // Skip while first-message is being replayed
-      if (firstMsgRef.current || isSubmittingFirstMsg.current) return;
-
-      try {
-        const r = await fetch(`${backendBase}/api/thread/${tid}/`);
-        if (!r.ok) return;
-        const json = await r.json();
-
-        const msgs = json?.data?.messages || [];
-        if (!Array.isArray(msgs)) return;
-
-        setMessages(
-          msgs.map((m: any) => ({
-            role: m.role,
-            content: m.content,
-            isUser: m.role === 'user',
-            noBubble: m.role === 'assistant',
-            attachments: m.attachments || [],
-          }))
-        );
-
-        setTimeout(scrollToBottom, 100);
-      } catch {}
-    };
-
-    loadMessages();
-  }, [
-    backendBase,
-    threadId,
-    initiatedThreadId,
-    scrollToBottom,
-    isSubmittingFirstMsg,
-  ]);
-
-  // Welcome page → bring first message
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const cachedMsg = sessionStorage.getItem('kinber:firstMessage');
-    const cachedAttachments =
-      sessionStorage.getItem('kinber:firstAttachments');
-
-    if (cachedMsg) {
-      firstMsgRef.current = cachedMsg;
-      const attachments = cachedAttachments
-        ? JSON.parse(cachedAttachments)
-        : [];
-      setMessages([
-        {
-          role: 'user',
-          content: cachedMsg,
-          isUser: true,
-          attachments,
-        },
-      ]);
-    }
-  }, []);
-
-  // Auto scroll after first
-  useEffect(() => {
-    if (
-      messages.length === 1 &&
-      firstMsgRef.current &&
-      !hasScrolledToFirstMsg.current
-    ) {
-      hasScrolledToFirstMsg.current = true;
-      setTimeout(() => {
-        const container = chatContainerRef.current;
-        container?.scrollTo({
-          top: container.scrollHeight,
-          behavior: 'smooth',
-        });
-      }, 100);
-    }
-  }, [messages]);
-
-  // Submit cached first message
-  useEffect(() => {
-    const tid =
-      initiatedThreadId ||
-      threadId ||
-      new URLSearchParams(window.location.search).get('thread_id');
-
-    if (!firstMsgRef.current || !tid || isSubmittingFirstMsg.current)
-      return;
-
-    isSubmittingFirstMsg.current = true;
-    const msg = firstMsgRef.current;
-
-    (async () => {
-      await new Promise((r) => setTimeout(r, 200));
-
-      const attachmentsRaw = sessionStorage.getItem(
-        'kinber:firstAttachments'
-      );
-      const attachments = attachmentsRaw
-        ? JSON.parse(attachmentsRaw)
-        : [];
-
-      await handleSubmit(msg, attachments, true);
-
-      firstMsgRef.current = null;
-      isSubmittingFirstMsg.current = false;
-
-      sessionStorage.removeItem('kinber:firstMessage');
-      sessionStorage.removeItem('kinber:firstAttachments');
-    })();
-  }, [initiatedThreadId, threadId, handleSubmit]);
+    },
+    [supabase, threadId, initiatedThreadId, attachedFiles, scrollToBottom]
+  );
 
   /* ---------------------------------------------------------
-     RENDER
+     Load messages for thread
+  --------------------------------------------------------- */
+  useEffect(() => {
+    const load = async () => {
+      const tid = threadId || initiatedThreadId;
+      if (!tid) return;
+
+      const res = await fetch(`${backendBase}/api/thread/${tid}`);
+      if (!res.ok) return;
+
+      const json = await res.json();
+      const msgs = json?.messages || [];
+
+      setMessages(
+        msgs.map((m: any) => ({
+          role: m.role,
+          content: m.content,
+          isUser: m.role === 'user',
+          noBubble: m.role === 'assistant',
+          attachments: m.attachments || [],
+        }))
+      );
+
+      scrollToBottom();
+    };
+
+    load();
+  }, [backendBase, threadId, initiatedThreadId, scrollToBottom]);
+
+  /* ---------------------------------------------------------
+     Scroll button visibility
+  --------------------------------------------------------- */
+  useEffect(() => {
+    const el = chatContainerRef.current;
+    if (!el) return;
+
+    const onScroll = () => {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+      setShowScrollButton(dist > 200);
+    };
+
+    el.addEventListener('scroll', onScroll);
+    onScroll();
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
+
+  /* ---------------------------------------------------------
+     RENDER (Enhanced UI from Version B)
   --------------------------------------------------------- */
   return (
     <motion.div
@@ -542,6 +431,7 @@ const handleSubmit = useCallback(
               >
                 <RenderMarkdown text={msg.content} />
 
+                {/* 🔥 Attachment display from Version B */}
                 {Array.isArray(msg.attachments) &&
                   msg.attachments.length > 0 && (
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -595,6 +485,7 @@ const handleSubmit = useCallback(
             </motion.div>
           ))}
 
+          {/* Loading spinner from Version B */}
           {isGenerating && (
             <motion.div
               key="thinking-spinner"
@@ -609,16 +500,16 @@ const handleSubmit = useCallback(
               }}
             >
               <Image
-              src="/spinner-blue.png"
-              alt="Kinber thinking..."
-              width={36}
-              height={36}
-              style={{
-                animation: 'spin 1.2s linear infinite',
-                filter: 'brightness(1.2)',
-              }}
-            />
-           </motion.div>
+                src="/spinner-blue.png"
+                alt="Kinber thinking..."
+                width={36}
+                height={36}
+                style={{
+                  animation: 'spin 1.2s linear infinite',
+                  filter: 'brightness(1.2)',
+                }}
+              />
+            </motion.div>
           )}
         </AnimatePresence>
 
@@ -651,26 +542,36 @@ const handleSubmit = useCallback(
             padding: '0 24px',
           }}
         >
-          <MessageInput 
+          <MessageInput
             ref={chatInputRef}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onSubmit={(msg, atts) => handleSubmit(msg, atts || [])}
-            placeholder="Describe what you need help with..."
-            loading={isSubmitting}
-            disabled={isGenerating}
-
-            /* 🔥 CRITICAL FIX — Dashboard must store attachments */
-            onAttachmentsChange={(files) => {
-              console.log("📎 Dashboard received attachments:", files);
-              Promise.resolve().then(() => setAttachedFiles(files));
-            }}
-
-            isAgentRunning={isGenerating}
             onTranscription={(text) => {
               setInputValue((prev) =>
                 prev ? `${prev.trim()}\n${text}` : text
               );
+            }}
+            placeholder="Describe what you need help with..."
+            loading={isSubmitting}
+            disabled={isGenerating}
+            isAgentRunning={isGenerating}
+            onAttachmentsChange={(files) => {
+              console.log('📎 Dashboard received attachments:', files);
+
+              // 🔥 CRITICAL: Ignore empty updates during send
+              if (
+                isSendingRef.current &&
+                (!files || files.length === 0)
+              ) {
+                console.log('🛡️ Ignored empty attachments update during send');
+                return;
+              }
+
+              // ✅ Defer state update to avoid setState during render
+              Promise.resolve().then(() => {
+                setAttachedFiles(files || []);
+              });
             }}
           />
         </div>
@@ -713,5 +614,3 @@ const handleSubmit = useCallback(
     </motion.div>
   );
 }
-
-export default DashboardContent;

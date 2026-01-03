@@ -20,23 +20,63 @@ from backend.db.supabase_client import get_supabase
 from backend.services.gemini import (
     run_gemini_agent,
     analyze_image_with_gemini,
+    generate_short_summary,
 )
 
 # --------------------------------------------------
 # Attachment text extraction (SAFE PLACEHOLDER)
 # --------------------------------------------------
+import PyPDF2
+from io import BytesIO
+from typing import Any, Union
+
 def extract_attachment_text(source: Any) -> str:
     """
-    Placeholder for attachment text extraction.
-
-    - source can be:
-      • BytesIO (raw file bytes)
-      • str (URL or base64)
-
-    Returns extracted text as string.
+    Extract text from PDF files.
+    
+    Args:
+        source: BytesIO object containing PDF bytes
+    
+    Returns:
+        Extracted text as string
     """
-    # TODO: plug OCR / PDF / DOCX extraction later
-    return ""
+    try:
+        if isinstance(source, BytesIO):
+            # Reset stream position to beginning
+            source.seek(0)
+            
+            # Create PDF reader
+            pdf_reader = PyPDF2.PdfReader(source)
+            
+            # Extract text from all pages
+            text_parts = []
+            for page_num, page in enumerate(pdf_reader.pages):
+                try:
+                    page_text = page.extract_text()
+                    if page_text.strip():
+                        text_parts.append(f"--- Page {page_num + 1} ---\n{page_text}")
+                except Exception as e:
+                    print(f"⚠️ Failed to extract page {page_num + 1}: {e}")
+                    continue
+            
+            extracted = "\n\n".join(text_parts)
+            
+            if extracted.strip():
+                print(f"✅ Successfully extracted {len(extracted)} characters from PDF")
+                return extracted
+            else:
+                print("⚠️ PDF appears to be empty or contains only images")
+                return ""
+        
+        else:
+            print(f"⚠️ Unsupported source type: {type(source)}")
+            return ""
+    
+    except Exception as e:
+        print(f"❌ PDF extraction error: {e}")
+        import traceback
+        traceback.print_exc()
+        return ""
 
 # --------------------------------------------------
 # Router
@@ -61,7 +101,6 @@ class MessageBody(BaseModel):
     agent: Optional[str] = "default"
     attachments: Optional[List[Dict[str, Any]]] = []
 
-
 # ────────────────────────────────────────────────
 # CREATE THREAD
 # ────────────────────────────────────────────────
@@ -75,16 +114,20 @@ async def create_thread(body: ThreadCreate):
 
         thread_id = str(uuid.uuid4())
 
+        now = datetime.utcnow().isoformat()
+
         insert_data = {
             "thread_id": thread_id,
             "title": body.title or "New Conversation",
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": now,
+            "updated_at": now,
         }
 
+        # Map incoming user_id → threads.account_id (your DB column)
         if body.user_id:
             try:
                 uuid.UUID(body.user_id)
-                insert_data["user_id"] = body.user_id
+                insert_data["account_id"] = body.user_id
             except ValueError:
                 print(f"⚠️ Invalid user_id ignored: {body.user_id}")
 
@@ -149,7 +192,7 @@ async def start_agent_run(thread_id: str, request: Request):
     try:
         body = await request.json()
 
-        message = body.get("message", "").strip()
+        message = (body.get("message") or "").strip()
         model_name = body.get("model_name", "gemini-2.0-flash-exp")
         agent = body.get("agent", "default")
         attachments = body.get("attachments", []) or []
@@ -159,6 +202,7 @@ async def start_agent_run(thread_id: str, request: Request):
         print(f"📎 Attachments received: {len(attachments)}")
 
         supabase = get_supabase()
+        now = datetime.utcnow().isoformat()
 
         # ── Save user message ──────────────────────
         supabase.table("messages").insert(
@@ -166,39 +210,158 @@ async def start_agent_run(thread_id: str, request: Request):
                 "thread_id": thread_id,
                 "role": "user",
                 "content": message,
-                "created_at": datetime.utcnow().isoformat(),
+                "created_at": now,
             }
         ).execute()
+
         # 🔄 Touch thread updated_at
         supabase.table("threads").update(
-            {"updated_at": datetime.utcnow().isoformat()}
+            {"updated_at": now}
         ).eq("thread_id", thread_id).execute()
 
-        # ── Run Gemini agent ───────────────────────
-        ai_reply = await run_gemini_agent(
+        # ──────────────────────────────────────────
+        # ✅ PROCESS ATTACHMENTS (OCR + VISION)
+        # ──────────────────────────────────────────
+        ocr_metadata = []
+        vision_metadata = []
+        
+        # Process attachments if present
+        if attachments:
+            print(f"🔍 Processing {len(attachments)} attachments...")
+            
+            for idx, file in enumerate(attachments):
+                mime = file.get("type", "") or ""
+                base64_data = file.get("base64")
+                file_name = file.get("name", f"file_{idx}")
+                
+                # Handle PDFs with OCR
+                if mime == "application/pdf" and base64_data:
+                    print(f"📄 OCR processing PDF: {file_name}")
+                    try:
+                        # Extract base64 content
+                        if base64_data.startswith("data:"):
+                            base64_content = base64_data.split(",", 1)[1]
+                        else:
+                            base64_content = base64_data
+                        
+                        pdf_bytes = base64.b64decode(base64_content)
+                        extracted_text = extract_attachment_text(BytesIO(pdf_bytes))
+                        
+                        if extracted_text:
+                            ocr_metadata.append({
+                                "name": file_name,
+                                "text": extracted_text,
+                            })
+                            print(f"✅ OCR extracted {len(extracted_text)} chars from {file_name}")
+                    except Exception as e:
+                        print(f"❌ OCR failed for {file_name}: {e}")
+                
+                # Handle images with Vision
+                elif mime.startswith("image") and base64_data:
+                    print(f"📸 Vision analyzing image: {file_name}")
+                    try:
+                        description = await analyze_image_with_gemini(
+                            base64_data,
+                            mime_type=mime,
+                        )
+                        vision_metadata.append({
+                            "name": file_name,
+                            "description": description,
+                        })
+                        print(f"✅ Vision analyzed {file_name}")
+                    except Exception as e:
+                        print(f"❌ Vision failed for {file_name}: {e}")
+        
+        # Inject OCR text into message
+        if ocr_metadata:
+            print(f"📄 Injecting OCR text into prompt ({len(ocr_metadata)} docs)")
+            blocks = []
+            for doc in ocr_metadata:
+                blocks.append(
+                    f"OCR_EXTRACT — {doc['name']}:\n{doc.get('text', '')}"
+                )
+            message += "\n\n" + "\n\n".join(blocks)
+
+        # ──────────────────────────────────────────
+        # ✅ RUN GEMINI AGENT (WITH ATTACHMENTS)
+        # ──────────────────────────────────────────
+        print(f"🔍 Running Gemini agent: model={model_name}")
+        print(f"🔍 GEMINI: MTM=no, LTM=no, STM=no, OCR={len(ocr_metadata)}, Vision={len(vision_metadata)}")
+        
+        raw_result = await run_gemini_agent(
             message,
             agent=agent,
             model_name=model_name,
+            ocr=ocr_metadata,
+            vision=vision_metadata,
         )
 
-        # ── Save assistant reply ───────────────────
+
+        # ──────────────────────────────────────────
+        # ✅ NORMALIZE RESPONSE
+        # ──────────────────────────────────────────
+        agent_reply = None
+
+        if isinstance(raw_result, str):
+            agent_reply = raw_result.strip()
+        elif isinstance(raw_result, dict):
+            agent_reply = (
+                raw_result.get("assistant_reply")
+                or raw_result.get("text")
+                or raw_result.get("output")
+            )
+        else:
+            agent_reply = getattr(raw_result, "text", None)
+
+        if not agent_reply or not isinstance(agent_reply, str):
+            agent_reply = "I’m sorry — I couldn’t generate a response this time."
+
+        # ──────────────────────────────────────────
+        # ✅ SAVE ASSISTANT MESSAGE
+        # ──────────────────────────────────────────
         supabase.table("messages").insert(
             {
                 "thread_id": thread_id,
                 "role": "assistant",
-                "content": ai_reply,
+                "content": agent_reply,
                 "created_at": datetime.utcnow().isoformat(),
             }
         ).execute()
 
-        return {
-            "assistant_reply": ai_reply,
-        }
+        # ──────────────────────────────────────────
+        # ✅ AUTO-TITLE THREAD
+        # ──────────────────────────────────────────
+        short_title = (message or "Conversation")[:40]
+        if len(message) > 40:
+            short_title += "…"
+
+        supabase.table("threads").update(
+            {
+                "title": short_title,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+        ).eq("thread_id", thread_id).execute()
+
+        print(f"🧾 Auto-titled thread → {short_title}")
+
+        # ──────────────────────────────────────────
+        # ✅ FINAL RESPONSE (FRONTEND SAFE)
+        # ──────────────────────────────────────────
+        return JSONResponse(
+            {
+                "status": "success",
+                "assistant_reply": agent_reply,
+                "data": {
+                    "assistant_reply": agent_reply
+                },
+            }
+        )
 
     except Exception as e:
         print("❌ agent/start error:", e)
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+
 
         # ───────────────────────────────
         # 🧠 Static Memory Report Command
@@ -321,19 +484,17 @@ async def start_agent_run(thread_id: str, request: Request):
             else:
                 reply_text += "- No recent messages found.\n"
 
-            return JSONResponse(
-                {
-                    "status": "success",
-                    "data": {
-                        "assistant_reply": reply_text,
-                        "memory_report": {
-                            "stm": stm_list,
-                            "mtm": mtm_value,
-                            "ltm": ltm_list,
-                        },
-                    },
+            # Use memory report as assistant reply
+            agent_reply = reply_text
+
+            # Optional: attach memory report for later use
+            extra_payload = {
+                "memory_report": {
+                    "stm": stm_list,
+                    "mtm": mtm_value,
+                    "ltm": ltm_list,
                 }
-            )
+            }
 
         # ───────────────────────────────
         # ───────────────────────────────
@@ -534,8 +695,8 @@ async def start_agent_run(thread_id: str, request: Request):
             mid_summary = None
 
         # ───────────────────────────────
-        # OCR Extraction (PDF / DOCX / TXT) — FIXED
-        # Prioritize BASE64. Avoid Google Drive URL downloads (403 issue)
+        # OCR Extraction (PDF / DOCX / TXT)
+        # Priority: BASE64 → URL fallback
         # ───────────────────────────────
         ocr_metadata: List[Dict[str, Any]] = []
 
@@ -545,71 +706,120 @@ async def start_agent_run(thread_id: str, request: Request):
             url = file.get("url")
 
             # -----------------------------
-            # 1️⃣ BASE64 FIRST (PDF primary)
+            # 1️⃣ PDF via BASE64 (PRIMARY)
             # -----------------------------
             if base64_data and file_name.endswith(".pdf"):
-                print(f"📄 OCR (base64) for PDF: {file_name}")
+                print(f"📄 OCR base64 PDF detected: {file_name}")
+
                 try:
-                    b64 = base64_data.split(",")[-1]
+                    # Clean base64 prefix if present
+                    b64 = base64_data.split(",")[-1].strip()
                     pdf_bytes = base64.b64decode(b64)
+
+                    text = ""
 
                     try:
                         from pypdf import PdfReader
-                        reader = PdfReader(BytesIO(pdf_bytes))
-                        text = "\n".join(
-                            (page.extract_text() or "") for page in reader.pages
-                        )
-                    except Exception as e:
-                        print(f"⚠️ pypdf failed for {file_name}: {e}")
-                        text = ""
 
-                    if text:
+                        reader = PdfReader(BytesIO(pdf_bytes))
+                        extracted_pages = []
+
+                        for i, page in enumerate(reader.pages):
+                            page_text = page.extract_text() or ""
+                            if page_text.strip():
+                                extracted_pages.append(page_text)
+
+                        text = "\n\n".join(extracted_pages)
+
+                    except Exception as e:
+                        print(f"⚠️ pypdf parsing failed for {file_name}: {e}")
+
+                    if text and text.strip():
+                        ocr_metadata.append({
+                            "name": file.get("name"),
+                            "text": text[:4000],  # safety cap
+                        })
+                        print(f"✅ OCR extracted from PDF ({len(text)} chars)")
+                        continue
+                    else:
+                        print("⚠️ PDF OCR completed but no readable text found")
+
+                except Exception as e:
+                    print(f"❌ PDF base64 OCR fatal error for {file_name}: {e}")
+            # ---------------------------------
+            # 2️⃣ Generic BASE64 (non-PDF)
+            # ---------------------------------
+            if base64_data and not file_name.endswith(".pdf"):
+                print(f"📄 OCR generic base64 file: {file_name}")
+                try:
+                    b64 = base64_data.split(",")[-1]
+                    raw_bytes = base64.b64decode(b64)
+                    text = extract_attachment_text(BytesIO(raw_bytes)) or ""
+
+                    if text.strip():
                         ocr_metadata.append({
                             "name": file.get("name"),
                             "text": text[:4000],
                         })
+                        print(f"✅ OCR extracted ({len(text)} chars)")
                         continue
-
-                except Exception as e:
-                    print(f"⚠️ PDF base64 OCR failed for {file_name}: {e}")
-
-            # -------------------------------------------
-            # 2️⃣ GENERIC BASE64 EXTRACTION
-            # -------------------------------------------
-            if base64_data and not file_name.endswith(".pdf"):
-                print(f"📄 OCR (base64 generic) for: {file_name}")
-                try:
-                    b64 = base64_data.split(",")[-1]
-                    raw_bytes = base64.b64decode(b64)
-                    text = extract_attachment_text(BytesIO(raw_bytes))
-                    if text:
+                    else:
+                        # ⚠️ File exists but no extractable text
                         ocr_metadata.append({
                             "name": file.get("name"),
-                            "text": text[:4000]
+                            "text": "[File detected but text could not be extracted automatically.]",
                         })
+                        print("⚠️ Generic OCR empty output — placeholder injected")
                         continue
-                except Exception as e:
-                    print(f"⚠️ Generic base64 OCR failed: {e}")
 
-            # -------------------------------------------
-            # 3️⃣ URL FALLBACK
-            # -------------------------------------------
+                except Exception as e:
+                    print(f"❌ Generic base64 OCR error: {e}")
+                    ocr_metadata.append({
+                        "name": file.get("name"),
+                        "text": "[File detected but OCR processing failed due to an internal error.]",
+                    })
+                    continue
+
+            # -----------------------------
+            # 3️⃣ URL fallback (last resort)
+            # -----------------------------
             if url and not base64_data:
-                print(f"📄 OCR (url) fallback for: {file_name}")
+                print(f"🌐 OCR URL fallback: {file_name}")
                 try:
-                    text = extract_attachment_text(url)
-                    if text:
+                    text = extract_attachment_text(url) or ""
+                    if text.strip():
                         ocr_metadata.append({
                             "name": file.get("name"),
-                            "text": text[:4000]
+                            "text": text[:4000],
                         })
+                        print(f"✅ OCR extracted from URL ({len(text)} chars)")
+                    else:
+                        ocr_metadata.append({
+                            "name": file.get("name"),
+                            "text": "[File detected via URL but text could not be extracted.]",
+                        })
+                        print("⚠️ URL OCR empty output — placeholder injected")
                 except Exception as e:
-                    print(f"⚠️ OCR URL error for {file_name}: {e}")
+                    print(f"❌ OCR URL error: {e}")
+                    ocr_metadata.append({
+                        "name": file.get("name"),
+                        "text": "[File detected via URL but OCR failed due to an internal error.]",
+                    })
 
-        # <-- OCR extraction loop just ended here
 
         # ───────────────────────────────
-        # Store OCR text in thread metadata (only once)
+        # DEBUG: OCR SUMMARY (CRITICAL)
+        # ───────────────────────────────
+        print("📄 OCR_METADATA summary:", [
+            {
+                "name": d.get("name"),
+                "text_len": len(d.get("text", "")),
+            }
+            for d in ocr_metadata
+        ])
+
+        # ───────────────────────────────
+        # Store OCR text in thread metadata
         # ───────────────────────────────
         try:
             if ocr_metadata:
@@ -646,14 +856,15 @@ async def start_agent_run(thread_id: str, request: Request):
             print("⚠️ Failed to save OCR to metadata:", e)
 
         # ───────────────────────────────
-        # Inject OCR Text into User Message
+        # Inject OCR text into user message
+        # (Prevents Gemini asking for PDF again)
         # ───────────────────────────────
         if ocr_metadata:
-            print(f"📄 Injecting {len(ocr_metadata)} document(s) OCR into message")
+            print(f"📄 Injecting OCR text into prompt ({len(ocr_metadata)} docs)")
             blocks = []
             for doc in ocr_metadata:
                 blocks.append(
-                    f"--- DOCUMENT: {doc['name']} ---\n{doc.get('text', '')}"
+                    f"OCR_EXTRACT — {doc['name']}:\n{doc.get('text', '')}"
                 )
 
             message += "\n\n" + "\n\n".join(blocks)
@@ -669,7 +880,7 @@ async def start_agent_run(thread_id: str, request: Request):
             base64_data = file.get("base64")
 
             if mime.startswith("image") and base64_data:
-                print(f"📸 Vision → analyzing image {idx+1}: {file.get('name')}")
+                print(f"📸 Vision analyzing image {idx+1}: {file.get('name')}")
                 try:
                     description = await analyze_image_with_gemini(
                         base64_data,
@@ -699,7 +910,7 @@ async def start_agent_run(thread_id: str, request: Request):
         # ───────────────────────────────
         print(f"🔍 Running Gemini agent: model={model_name}")
 
-        agent_reply = await run_gemini_agent(
+        raw_result = await run_gemini_agent(
             message,
             ocr=ocr_metadata,
             vision=vision_metadata,
@@ -709,6 +920,28 @@ async def start_agent_run(thread_id: str, request: Request):
             model_name=model_name,
             agent=agent,
         )
+
+        # ───────────────────────────────
+        # ✅ NORMALIZE GEMINI OUTPUT (CRITICAL)
+        # ───────────────────────────────
+        agent_reply = None
+
+        if isinstance(raw_result, str):
+            agent_reply = raw_result.strip()
+
+        elif isinstance(raw_result, dict):
+            agent_reply = (
+                raw_result.get("assistant_reply")
+                or raw_result.get("text")
+                or raw_result.get("output")
+            )
+
+        else:
+            # Gemini SDK object fallback
+            agent_reply = getattr(raw_result, "text", None)
+
+        print("🧠 Gemini raw result type:", type(raw_result))
+        print("🧠 Gemini reply extracted:", repr(agent_reply))
 
         # -------------------------------------------------------
         # 🛠️ TOOL CALL HANDLER (JSON tool-call from Gemini)
@@ -773,6 +1006,7 @@ async def start_agent_run(thread_id: str, request: Request):
             # ---------------------------------------------
             if tool_result is not None:
                 print("🔄 Sending tool result back to Gemini...")
+                print("🧪 FINAL OCR METADATA COUNT:", len(ocr_metadata))
 
                 second_pass = await run_gemini_agent(
                     message=json.dumps({
@@ -788,7 +1022,12 @@ async def start_agent_run(thread_id: str, request: Request):
                     vision=vision_metadata,
                 )
 
-                agent_reply = second_pass
+                if isinstance(second_pass, str):
+                    agent_reply = second_pass.strip()
+                elif isinstance(second_pass, dict):
+                    agent_reply = second_pass.get("assistant_reply") or second_pass.get("text")
+                else:
+                    agent_reply = getattr(second_pass, "text", None)
 
         # ───────────────────────────────
         # Generate Short-Term Summary (STM)
@@ -921,6 +1160,13 @@ Latest update:
             agent_reply = vision_block + agent_reply
 
         # ───────────────────────────────
+        # ───────────────────────────────
+        # ✅ FINAL SAFETY: Ensure agent_reply ALWAYS exists
+        # ───────────────────────────────
+        if not agent_reply or not isinstance(agent_reply, str):
+            agent_reply = "I’m sorry — I couldn’t generate a response this time."
+
+        # ───────────────────────────────
         # Save Messages
         # ───────────────────────────────
         try:
@@ -935,7 +1181,9 @@ Latest update:
                 "vision": vision_metadata,
                 "summary": short_summary or "",
             }
+
             supabase = get_supabase()
+
             supabase.table("messages").insert(
                 [
                     {
@@ -944,6 +1192,7 @@ Latest update:
                         "content": message,
                         "attachments": cleaned_attachments,
                         "metadata": metadata_user,
+                        "created_at": datetime.utcnow().isoformat(),
                     },
                     {
                         "thread_id": thread_id,
@@ -951,16 +1200,19 @@ Latest update:
                         "content": agent_reply,
                         "attachments": [],
                         "metadata": metadata_assistant,
+                        "created_at": datetime.utcnow().isoformat(),
                     },
                 ]
             ).execute()
 
-            short_title = message[:40] + ("…" if len(message) > 40 else "")
+            short_title = (message or "Conversation")[:40]
+            if message and len(message) > 40:
+                short_title += "…"
 
             supabase.table("threads").update(
                 {
                     "title": short_title,
-                    "updated_at": "now()",
+                    "updated_at": datetime.utcnow().isoformat(),
                 }
             ).eq("thread_id", thread_id).execute()
 
@@ -969,28 +1221,26 @@ Latest update:
         except Exception as e:
             print("⚠️ DB insert/update failed:", e)
 
+        # ───────────────────────────────
+        # ✅ SINGLE FINAL RETURN (FRONTEND SAFE)
+        # ───────────────────────────────
         return JSONResponse(
-            {"status": "success", "data": {"assistant_reply": agent_reply}}
+            {
+                "status": "success",
+                "data": {
+                    "assistant_reply": agent_reply
+                },
+            }
         )
 
     except Exception as e:
         print("❌ start_agent_run failed:", e)
         traceback.print_exc()
         return JSONResponse(
-            {"status": "error", "message": str(e)},
+            {
+                "status": "error",
+                "message": "Agent execution failed.",
+                "details": str(e),
+            },
             status_code=500,
         )
-
-def clean_attachments(attachments):
-    """
-    Remove base64 data from attachments before saving to DB.
-    Keeps only name, type, and url fields.
-    """
-    cleaned = []
-    for att in attachments or []:
-        cleaned.append({
-            "name": att.get("name"),
-            "type": att.get("type"),
-            "url": att.get("url"),
-        })
-    return cleaned

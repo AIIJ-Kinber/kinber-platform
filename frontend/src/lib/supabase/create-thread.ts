@@ -83,10 +83,9 @@ export const createThreadInSupabase = async (
 
         await supabase.from('threads').upsert([
           {
-            id: threadId,
-            title,
-            user_id,
-            created_at: new Date().toISOString(),
+            thread_id: threadId,
+            title: title || 'New Conversation',
+            account_id: user_id === 'guest' ? null : user_id,
             updated_at: new Date().toISOString(),
           },
         ]);

@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -33,61 +32,59 @@ export function SearchChatModal({ isOpen, onClose }: SearchChatModalProps) {
     };
   }, [isOpen]);
 
-  /* ────────────────────────────────────────────────
-     Fetch threads (STABLE – no loops)
-  ──────────────────────────────────────────────── */
-  const fetchThreads = useCallback(
-    async (term?: string) => {
-      try {
-        setLoading(true);
+const fetchThreads = useCallback(
+  async (term?: string) => {
+    try {
+      setLoading(true);
 
-        const since = new Date();
-        since.setDate(since.getDate() - 7);
+      let threadIdsFromMessages: string[] = [];
 
-        let matchingThreadIds: string[] = [];
+      // 1️⃣ Search messages (optional)
+      if (term?.trim()) {
+        const { data: messageMatches } = await supabase
+          .from('messages')
+          .select('thread_id')
+          .ilike('content', `%${term}%`)
+          .limit(50);
 
-        // Search messages if term exists
-        if (term?.trim()) {
-          const { data: messageMatches, error } = await supabase
-            .from('messages')
-            .select('thread_id')
-            .ilike('content', `%${term}%`);
-
-          if (error) throw error;
-
-          if (messageMatches?.length) {
-            matchingThreadIds = Array.from(
-              new Set(messageMatches.map((m: any) => m.thread_id))
-            );
-          }
+        if (messageMatches?.length) {
+          threadIdsFromMessages = Array.from(
+            new Set(messageMatches.map((m: any) => m.thread_id))
+          );
         }
+      }
 
-        let queryBuilder = supabase
-          .from('threads')
-          .select('thread_id, title, updated_at')
-          .gte('updated_at', since.toISOString())
-          .order('updated_at', { ascending: false })
-          .limit(20);
+      // 2️⃣ Threads query (NO date restriction)
+      let queryBuilder = supabase
+        .from('threads')
+        .select('thread_id, title, updated_at')
+        .order('updated_at', { ascending: false })
+        .limit(30);
 
-        if (matchingThreadIds.length > 0) {
-          queryBuilder = queryBuilder.in('thread_id', matchingThreadIds);
-        } else if (term?.trim()) {
+      if (term?.trim()) {
+        if (threadIdsFromMessages.length > 0) {
+          queryBuilder = queryBuilder.in(
+            'thread_id',
+            threadIdsFromMessages
+          );
+        } else {
           queryBuilder = queryBuilder.ilike('title', `%${term}%`);
         }
-
-        const { data, error } = await queryBuilder;
-        if (error) throw error;
-
-        setResults(data || []);
-      } catch (err) {
-        console.error('❌ SearchChatModal fetch error:', err);
-        setResults([]);
-      } finally {
-        setLoading(false);
       }
-    },
-    [supabase]
-  );
+
+      const { data, error } = await queryBuilder;
+      if (error) throw error;
+
+      setResults(data || []);
+    } catch (err) {
+      console.error('❌ SearchChatModal error:', err);
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  },
+  [supabase]
+);
 
   /* ────────────────────────────────────────────────
      Load threads on open (ONCE)
@@ -168,8 +165,10 @@ export function SearchChatModal({ isOpen, onClose }: SearchChatModalProps) {
                   key={thread.thread_id}
                   className="p-3 rounded-lg bg-[#2a2a2a] hover:bg-[#333] cursor-pointer"
                   onClick={() => {
-                    router.push(`/dashboard?thread_id=${thread.thread_id}`);
                     onClose();
+
+                    // 🔥 Force full navigation so dashboard reloads messages
+                    window.location.href = `/dashboard?thread_id=${thread.thread_id}`;
                   }}
                 >
                   <div className="text-sm font-medium">
@@ -181,9 +180,7 @@ export function SearchChatModal({ isOpen, onClose }: SearchChatModalProps) {
                 </div>
               ))
             ) : (
-              <p className="text-sm text-gray-400 p-3">
-                No chats found.
-              </p>
+              <p className="text-sm text-gray-400 p-3">No chats found.</p>
             )}
           </div>
         </motion.div>

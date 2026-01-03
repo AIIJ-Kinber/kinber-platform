@@ -930,10 +930,10 @@ async def run_gemini_agent(
             conv_lines = conv_lines[-6:]
         trimmed_conversation = "\n".join(conv_lines).strip()
 
-    # OCR: limit each text to 2000 chars
+    # OCR: limit each text to 3000 chars
     limited_ocr: list[dict] = []
     for item in ocr or []:
-        text = (item.get("text") or "")[:2000]
+        text = (item.get("text") or "")[:3000]
         if text.strip():
             limited_ocr.append(
                 {
@@ -975,6 +975,27 @@ async def run_gemini_agent(
     )
 
     # ─────────────────────────────────────────────
+    # FILE CONTEXT OVERRIDE (CRITICAL)
+    # If OCR/Vision exists, Gemini must use it and never ask to re-upload.
+    # ─────────────────────────────────────────────
+    has_file_context = bool(limited_ocr or limited_vision)
+
+    FILE_CONTEXT_OVERRIDE = ""
+    if has_file_context:
+        FILE_CONTEXT_OVERRIDE = """
+[FILE_CONTEXT_OVERRIDE]
+
+You have already been given extracted file content in the memory block above.
+- If OCR_EXTRACT exists: treat it as the text of the uploaded documents (PDF/DOCX/TXT).
+- If VISION_EXTRACT exists: treat it as the description of the uploaded images.
+
+RULES:
+- Do NOT say you "cannot process images" or "cannot read PDFs" when OCR_EXTRACT or VISION_EXTRACT is present.
+- Do NOT ask the user to upload the file again if file content is present.
+- Answer using the provided extracted content. If the extracted text is incomplete, ask for a specific missing page/section.
+""".strip()
+
+    # ─────────────────────────────────────────────
     # Final system prompt assembly
     # ─────────────────────────────────────────────
     system_parts: list[str] = []
@@ -1002,7 +1023,9 @@ async def run_gemini_agent(
     # 7) Memory blocks (optional – ONLY if something exists)
     if memory_fusion_block and "MEMORY_FUSION_BLOCK START" in memory_fusion_block:
         system_parts.append(memory_fusion_block)
-
+    # 8) File context override (only when OCR/Vision exists)
+    if FILE_CONTEXT_OVERRIDE:
+        system_parts.append(FILE_CONTEXT_OVERRIDE)
     system_message = "\n\n".join(
         part.strip() for part in system_parts if part and str(part).strip()
     )

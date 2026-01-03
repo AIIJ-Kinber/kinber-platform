@@ -158,7 +158,11 @@ function SidebarLeftInner(props: React.ComponentProps<typeof Sidebar>) {
 
           {/* New Chat */}
           <div
-            onClick={() => router.push('/welcome')}
+            onClick={() => {
+              sessionStorage.removeItem('kinber:firstMessage');
+              sessionStorage.removeItem('kinber:firstAttachments');
+              router.push('/welcome');
+            }}
             className={cn(
               'mt-4 flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-accent/40',
               pathname === '/welcome' && 'bg-accent font-semibold',
@@ -170,7 +174,7 @@ function SidebarLeftInner(props: React.ComponentProps<typeof Sidebar>) {
           </div>
         </div>
 
-{/* Main */}
+        {/* Main */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
           <SidebarItem
             collapsed={state === 'collapsed'}
@@ -200,7 +204,6 @@ function SidebarLeftInner(props: React.ComponentProps<typeof Sidebar>) {
             onClick={() => router.push('/')}
           />
 
-          {/* Recents */}
           {state !== 'collapsed' && (
             <div className="mt-5">
               <div className="text-xs uppercase text-gray-400 mb-2">
@@ -236,7 +239,6 @@ function SidebarLeftInner(props: React.ComponentProps<typeof Sidebar>) {
                   height={36}
                   className="rounded-full"
                 />
-
                 {state !== 'collapsed' && (
                   <div className="truncate">
                     <div className="text-sm font-semibold">{user.name}</div>
@@ -260,12 +262,10 @@ function SidebarLeftInner(props: React.ComponentProps<typeof Sidebar>) {
           </DropdownMenu>
         </div>
       </Sidebar>
-
-      {/* ✅ Global Modals (outside Sidebar, still inside Provider) */}
-
     </>
   );
 }
+
 
 /* ────────────────────────────────────────────────
    Helpers
