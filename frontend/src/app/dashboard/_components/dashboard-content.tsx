@@ -225,21 +225,22 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
 
           const json = await res.json();
 
-        const newThreadId =
-          typeof json?.thread_id === 'string' ? json.thread_id : null;
+          const newThreadId =
+            typeof json?.thread_id === 'string' ? json.thread_id : null;
 
-        if (!newThreadId) {
-          throw new Error('Invalid thread_id returned from backend');
+          if (!newThreadId) {
+            throw new Error('Invalid thread_id returned from backend');
+          }
+
+          activeThreadId = newThreadId;
+          setInitiatedThreadId(newThreadId);
+
+          window.history.replaceState(
+            {},
+            '',
+            `/dashboard?thread_id=${newThreadId}`
+          );
         }
-
-        activeThreadId = newThreadId;
-        setInitiatedThreadId(newThreadId);
-
-        window.history.replaceState(
-          {},
-          '',
-          `/dashboard?thread_id=${newThreadId}`
-        );
 
         // 🔥 Build payload with attachments
         const payload = {
