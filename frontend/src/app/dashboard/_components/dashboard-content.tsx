@@ -339,6 +339,7 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
    Auto-submit first message from Welcome page
 --------------------------------------------------------- */
 useEffect(() => {
+  // Prevent duplicate execution
   if (hasSubmittedWelcomeRef.current) return;
 
   const firstMessage = sessionStorage.getItem('kinber:firstMessage');
@@ -346,46 +347,22 @@ useEffect(() => {
 
   const attachmentsRaw =
     sessionStorage.getItem('kinber:firstAttachments');
+
   const attachments = attachmentsRaw
     ? JSON.parse(attachmentsRaw)
     : [];
 
   hasSubmittedWelcomeRef.current = true;
 
-  // Clean immediately to prevent loops
+  // Clean immediately to prevent loops / replays
   sessionStorage.removeItem('kinber:firstMessage');
   sessionStorage.removeItem('kinber:firstAttachments');
 
-  // Small delay so UI + thread are ready
+  // Small delay ensures UI + thread state are ready
   setTimeout(() => {
-    handleSubmit(firstMessage, attachments, true);
-  }, 150);
-}, [handleSubmit]);
-
-/* ---------------------------------------------------------
-   Auto-submit first message from Welcome page
---------------------------------------------------------- */
-useEffect(() => {
-  if (hasSubmittedWelcomeRef.current) return;
-
-  const firstMessage = sessionStorage.getItem('kinber:firstMessage');
-  if (!firstMessage) return;
-
-  const attachmentsRaw =
-    sessionStorage.getItem('kinber:firstAttachments');
-  const attachments = attachmentsRaw
-    ? JSON.parse(attachmentsRaw)
-    : [];
-
-  hasSubmittedWelcomeRef.current = true;
-
-  // Clean immediately to prevent loops
-  sessionStorage.removeItem('kinber:firstMessage');
-  sessionStorage.removeItem('kinber:firstAttachments');
-
-  // Delay ensures thread + UI are ready
-  setTimeout(() => {
-    handleSubmit(firstMessage, attachments, true);
+    // 🔥 IMPORTANT: skipEcho = false
+    // → ensures user message is rendered before AI reply
+    handleSubmit(firstMessage, attachments, false);
   }, 150);
 }, [handleSubmit]);
 
