@@ -140,20 +140,28 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const isSendingRef = useRef(false);
 
-  /* ---------- Backend Base ---------- */
-  const backendBase = useMemo(() => {
-    const envUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || '').trim();
-    const resolved =
-      envUrl ||
-      (typeof window !== 'undefined' &&
-      (window.location.hostname === 'localhost' ||
-        window.location.hostname === '127.0.0.1')
-        ? 'http://127.0.0.1:8000'
-        : 'https://api.kinber.com');
-    return resolved.replace(/\/+$/, '');
-  }, []);
+/* ---------- Backend Base ---------- */
+const backendBase = useMemo(() => {
+  const envUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || '').trim();
 
-  /* ---------------------------------------------------------
+  if (envUrl) {
+    return envUrl.replace(/\/+$/, '');
+  }
+
+  if (typeof window !== 'undefined') {
+    if (
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1'
+    ) {
+      return 'http://127.0.0.1:8000';
+    }
+  }
+
+  // ✅ Production: SAME ORIGIN (Vercel proxy → Railway)
+  return '/api';
+}, []);
+
+/* ---------------------------------------------------------
      Scroll helper
   --------------------------------------------------------- */
   const scrollToBottom = useCallback(() => {

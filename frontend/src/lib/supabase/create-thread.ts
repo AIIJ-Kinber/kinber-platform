@@ -23,7 +23,7 @@ export const createThreadInSupabase = async (
       ) {
         base = 'http://127.0.0.1:8000'; // local backend
       } else {
-        base = 'https://api.kinber.com'; // production backend
+        base = '/api'; // production relative path
       }
     }
 
