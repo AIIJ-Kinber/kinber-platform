@@ -339,7 +339,6 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
    Auto-submit first message from Welcome page
 --------------------------------------------------------- */
 useEffect(() => {
-  // Prevent duplicate execution
   if (hasSubmittedWelcomeRef.current) return;
 
   const firstMessage = sessionStorage.getItem('kinber:firstMessage');
@@ -354,15 +353,24 @@ useEffect(() => {
 
   hasSubmittedWelcomeRef.current = true;
 
-  // Clean immediately to prevent loops / replays
+  // Clean immediately to prevent loops
   sessionStorage.removeItem('kinber:firstMessage');
   sessionStorage.removeItem('kinber:firstAttachments');
 
-  // Small delay ensures UI + thread state are ready
+  // 1️⃣ IMMEDIATELY render user message (THIS WAS MISSING)
+  setMessages((prev) => [
+    ...prev,
+    {
+      role: 'user',
+      content: firstMessage,
+      isUser: true,
+      attachments,
+    },
+  ]);
+
+  // 2️⃣ Small delay so UI paints before agent starts
   setTimeout(() => {
-    // 🔥 IMPORTANT: skipEcho = false
-    // → ensures user message is rendered before AI reply
-    handleSubmit(firstMessage, attachments, false);
+    handleSubmit(firstMessage, attachments, true); // skipEcho = true
   }, 150);
 }, [handleSubmit]);
 
