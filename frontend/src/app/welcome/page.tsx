@@ -8,7 +8,6 @@ import { useRouter } from 'next/navigation';
 import { SidebarLeft } from '../../_components/sidebar/sidebar-left';
 import { MessageInput } from '../../_components/thread/chat-input/message-input';
 import { createClient } from '@/lib/supabase/client';
-import { apiFetch } from '@/lib/api';
 
 export default function WelcomePage() {
   const supabase = createClient();
@@ -38,7 +37,7 @@ export default function WelcomePage() {
   }, [supabase, router]);
 
   /* -----------------------------------------------------------
-     📝 INPUT STATE — Hook order MUST stay stable
+     📝 INPUT STATE
   ------------------------------------------------------------ */
   const [loading, setLoading] = useState(false);
   const [localInput, setLocalInput] = useState('');
@@ -46,7 +45,7 @@ export default function WelcomePage() {
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
 
   /* -----------------------------------------------------------
-     📨 Handle first message (BACKEND ONLY)
+     📨 Handle first message (STORE ONLY)
   ------------------------------------------------------------ */
   const handleLocalSubmit = async (
     message?: string,
@@ -58,27 +57,7 @@ export default function WelcomePage() {
     setLoading(true);
 
     try {
-      // 1️⃣ Create thread via backend
-      const res = await apiFetch('/api/thread', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: 'New Conversation',
-        }),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Thread creation failed: ${errText}`);
-      }
-
-      const data = await res.json();
-      const threadId: string | undefined = data?.thread_id;
-
-      if (!threadId) {
-        throw new Error('Backend did not return thread_id');
-      }
-
-      // 2️⃣ Store first message & attachments for dashboard pickup
+      // 1️⃣ Store message for Dashboard pickup
       sessionStorage.setItem('kinber:firstMessage', trimmed);
 
       const filesToStore =
@@ -93,8 +72,8 @@ export default function WelcomePage() {
         sessionStorage.removeItem('kinber:firstAttachments');
       }
 
-      // 3️⃣ Navigate to dashboard
-      router.push(`/dashboard?thread_id=${threadId}`);
+      // 2️⃣ Navigate — Dashboard will create thread + submit
+      router.push('/dashboard');
     } catch (err) {
       console.error('❌ Welcome submit failed:', err);
       alert('Sorry, I couldn’t process that request.');
@@ -106,9 +85,8 @@ export default function WelcomePage() {
   };
 
   /* -----------------------------------------------------------
-     🌀 UI OUTPUT (Returns come LAST)
+     🌀 UI OUTPUT
   ------------------------------------------------------------ */
-
   if (checkingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#161616] text-gray-100">
@@ -154,8 +132,8 @@ export default function WelcomePage() {
             disabled={loading}
             isAgentRunning={false}
             onAttachmentsChange={(files) => {
-              // avoid state update during render
-              Promise.resolve().then(() => setAttachments(files));
+              // ✅ Safe async state update
+              Promise.resolve().then(() => setAttachments(files || []));
             }}
           />
         </motion.div>

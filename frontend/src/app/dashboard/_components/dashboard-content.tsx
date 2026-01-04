@@ -33,7 +33,6 @@ function RenderMarkdown({ text }: { text: string }) {
         a: ({ href, children, ...props }) => {
           const url = href || '#';
           const shortened = url.length > 50 ? url.slice(0, 45) + '…' : url;
-
           const isYouTube =
             url.includes('youtube.com') || url.includes('youtu.be');
           const isTikTok = url.includes('tiktok.com');
@@ -132,6 +131,8 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
   const [initiatedThreadId, setInitiatedThreadId] = useState<string | null>(null);
   const [attachedFiles, setAttachedFiles] = useState<UIAttachment[]>([]);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const hasSubmittedWelcomeRef = useRef(false);
+
 
   /* ---------- Refs ---------- */
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
@@ -165,9 +166,16 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
      MAIN SUBMIT (MERGED - AI responses from A + attachment handling from B)
   --------------------------------------------------------- */
   const handleSubmit = useCallback(
-    async (message: string, attachments: UIAttachment[] = [], skipEcho = false) => {
+    async (
+      message: string,
+      attachments: UIAttachment[] = [],
+      skipEcho = false
+    ) => {
       const trimmed = message.trim();
-      if (!trimmed || isSendingRef.current) return;
+      if (!trimmed) return;
+
+      // 🔒 Absolute guard against duplicate execution
+      if (isSendingRef.current || isGenerating) return;
 
       isSendingRef.current = true;
       setIsSubmitting(true);
@@ -327,6 +335,59 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
     },
     [supabase, threadId, initiatedThreadId, attachedFiles, scrollToBottom]
   );
+/* ---------------------------------------------------------
+   Auto-submit first message from Welcome page
+--------------------------------------------------------- */
+useEffect(() => {
+  if (hasSubmittedWelcomeRef.current) return;
+
+  const firstMessage = sessionStorage.getItem('kinber:firstMessage');
+  if (!firstMessage) return;
+
+  const attachmentsRaw =
+    sessionStorage.getItem('kinber:firstAttachments');
+  const attachments = attachmentsRaw
+    ? JSON.parse(attachmentsRaw)
+    : [];
+
+  hasSubmittedWelcomeRef.current = true;
+
+  // Clean immediately to prevent loops
+  sessionStorage.removeItem('kinber:firstMessage');
+  sessionStorage.removeItem('kinber:firstAttachments');
+
+  // Small delay so UI + thread are ready
+  setTimeout(() => {
+    handleSubmit(firstMessage, attachments, true);
+  }, 150);
+}, [handleSubmit]);
+
+/* ---------------------------------------------------------
+   Auto-submit first message from Welcome page
+--------------------------------------------------------- */
+useEffect(() => {
+  if (hasSubmittedWelcomeRef.current) return;
+
+  const firstMessage = sessionStorage.getItem('kinber:firstMessage');
+  if (!firstMessage) return;
+
+  const attachmentsRaw =
+    sessionStorage.getItem('kinber:firstAttachments');
+  const attachments = attachmentsRaw
+    ? JSON.parse(attachmentsRaw)
+    : [];
+
+  hasSubmittedWelcomeRef.current = true;
+
+  // Clean immediately to prevent loops
+  sessionStorage.removeItem('kinber:firstMessage');
+  sessionStorage.removeItem('kinber:firstAttachments');
+
+  // Delay ensures thread + UI are ready
+  setTimeout(() => {
+    handleSubmit(firstMessage, attachments, true);
+  }, 150);
+}, [handleSubmit]);
 
   /* ---------------------------------------------------------
      Load messages for thread
