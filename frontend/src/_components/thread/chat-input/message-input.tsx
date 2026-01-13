@@ -729,14 +729,21 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             rows={1}
-            style={{ backgroundColor: 'transparent' }}
+            style={{
+              backgroundColor: 'transparent',
+              fontFamily: 'Charter, Georgia, Cambria, "Times New Roman", serif',
+              fontSize: '16px',
+              lineHeight: '1.6',
+              letterSpacing: '0.01em',
+            }}
             onInput={(e) => {
               const el = e.target as HTMLTextAreaElement;
               el.style.height = 'auto';
               el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
             }}
             className={cn(
-              'w-full bg-transparent border-none shadow-none focus-visible:ring-0 text-[14px] min-h-[28px] max-h-[160px] overflow-y-hidden resize-none leading-tight placeholder-neutral-500 text-gray-100'
+              'w-full bg-transparent border-none shadow-none focus-visible:ring-0 text-[16px] min-h-[28px] max-h-[160px] overflow-y-hidden resize-none leading-relaxed placeholder-neutral-500 text-gray-100',
+              'font-serif' // Charter font via Tailwind
             )}
             disabled={disabled && !isAgentRunning}
           />

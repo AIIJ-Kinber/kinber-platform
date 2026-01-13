@@ -6,6 +6,7 @@ import { useSidebar } from '@/_components/ui/sidebar';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
 import ClientLayout from '../client-layout';
+import { usePathname } from 'next/navigation';
 
 export default function DashboardLayout({
   children,
@@ -18,6 +19,7 @@ export default function DashboardLayout({
   const supabase = createClient();
   const router = useRouter();
   const { state } = useSidebar();
+  const pathname = usePathname();
 
   // Local state (hooks must be at top)
   const [sidebarWidth, setSidebarWidth] = useState('250px');
@@ -105,7 +107,15 @@ export default function DashboardLayout({
             backgroundColor: '#252525',
           }}
         >
-          <div className="flex flex-col justify-between w-full max-w-[950px] h-full">
+          <div
+            className={`
+              flex flex-col justify-between w-full h-full
+              ${pathname.startsWith('/triplet')
+                ? 'max-w-none px-8'
+                : 'max-w-[950px]'
+              }
+            `}
+          >
             {children}
           </div>
         </div>

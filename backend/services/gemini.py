@@ -9,6 +9,12 @@ from typing import Optional
 import google.generativeai as genai
 from dotenv import load_dotenv
 
+# ============================================================
+# 🚫 GEMINI DISABLED — OpenAI is default for Kinber
+# ============================================================
+
+GEMINI_DISABLED = True
+
 # ─────────────────────────────────────────────
 # Load environment variables safely
 # ─────────────────────────────────────────────
@@ -16,13 +22,22 @@ env_path = os.path.join(os.path.dirname(__file__), "..", ".env")
 load_dotenv(dotenv_path=os.path.abspath(env_path))
 
 # ─────────────────────────────────────────────
-# Configure Gemini API
+# 🚫 Gemini Configuration (DISABLED by default)
+# OpenAI is the primary provider for Kinber
 # ─────────────────────────────────────────────
+
+GEMINI_DISABLED = True  # ⬅️ single switch to control Gemini
+
 api_key = os.getenv("GEMINI_API_KEY")
 
-if not api_key:
-    print("⚠️  WARNING: GEMINI_API_KEY not found in environment — Gemini will be disabled.")
+if GEMINI_DISABLED:
+    print("🚫 Gemini is disabled — skipping SDK initialization")
     genai_model_available = False
+
+elif not api_key:
+    print("⚠️ WARNING: GEMINI_API_KEY not found — Gemini unavailable")
+    genai_model_available = False
+
 else:
     print("✅ GEMINI_API_KEY found — configuring Gemini SDK...")
     try:
@@ -34,14 +49,21 @@ else:
         genai_model_available = False
 
 
-def _get_model(model_name: str = "gemini-2.0-flash-exp") -> Optional[genai.GenerativeModel]:
-    """Internal helper to get a Gemini model instance."""
+def _get_model(model_name: str = "gemini-2.0-flash-exp"):
+    """
+    Internal helper to get a Gemini model instance.
+
+    NOTE:
+    - Gemini is currently DISABLED for Kinber
+    - OpenAI is the default backend
+    """
     if not genai_model_available:
         return None
+
     try:
         return genai.GenerativeModel(model_name)
     except Exception as e:
-        print(f"❌ Failed to create GenerativeModel('{model_name}'): {e}")
+        print(f"⚠️ Gemini disabled: failed to init model '{model_name}': {e}")
         return None
 
 
@@ -1168,3 +1190,74 @@ async def test_connection() -> bool:
     except Exception as e:
         print("❌ Gemini connection failed:", e)
         return False
+# ─────────────────────────────────────────────
+# OpenAI fallback agent (DEFAULT)
+# ─────────────────────────────────────────────
+import os
+from openai import AsyncOpenAI
+
+_openai_client = None
+
+
+def _get_openai_client():
+    global _openai_client
+
+    if _openai_client is not None:
+        return _openai_client
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("❌ OPENAI_API_KEY is missing")
+
+    _openai_client = AsyncOpenAI(api_key=api_key)
+    return _openai_client
+
+
+async def run_openai_agent(
+    message: str,
+    ocr=None,
+    vision=None,
+    model_name: str = "gpt-4o-mini",
+    agent: str = "default",
+):
+    """
+    OpenAI-based agent.
+    Replaces Gemini completely.
+    """
+
+    client = _get_openai_client()
+
+    system_prompt = (
+        "You are Kinber AI — a precise, professional assistant.\n"
+        "Be clear, structured, and accurate.\n"
+    )
+
+    # Inject OCR + Vision context if present
+    context_blocks = []
+
+    if ocr:
+        for doc in ocr:
+            context_blocks.append(
+                f"OCR_EXTRACT ({doc.get('name')}):\n{doc.get('text')}"
+            )
+
+    if vision:
+        for img in vision:
+            context_blocks.append(
+                f"IMAGE_ANALYSIS ({img.get('name')}):\n{img.get('description')}"
+            )
+
+    final_prompt = message
+    if context_blocks:
+        final_prompt += "\n\n" + "\n\n".join(context_blocks)
+
+    response = await client.chat.completions.create(
+        model=model_name,
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": final_prompt},
+        ],
+        temperature=0.4,
+    )
+
+    return response.choices[0].message.content

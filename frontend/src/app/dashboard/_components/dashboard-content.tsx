@@ -22,79 +22,161 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 
 /* ---------------------------------------------------------
-   MARKDOWN RENDERER (Enhanced from Version B)
+   MARKDOWN RENDERER (Claude-style Typography)
 --------------------------------------------------------- */
 function RenderMarkdown({ text }: { text: string }) {
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeHighlight, rehypeRaw]}
-      components={{
-        a: ({ href, children, ...props }) => {
-          const url = href || '#';
-          const shortened = url.length > 50 ? url.slice(0, 45) + '…' : url;
-          const isYouTube =
-            url.includes('youtube.com') || url.includes('youtu.be');
-          const isTikTok = url.includes('tiktok.com');
-
-          const youtubeIcon = (
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="red"
-              style={{ marginRight: '4px' }}
-            >
-              <path d="M23.5 6.2s-.2-1.7-.8-2.4c-.8-.9-1.6-.9-2-1C17.3 2.5 12 2.5 12 2.5h-.1s-5.3 0-8.7.3c-.4.1-1.2.1-2 1C.7 4.5.5 6.2.5 6.2S0 8.2 0 10.2v1.6c0 2 .5 4 .5 4s.2 1.7.8 2.4c.8.9 1.9.9 2.4 1 1.8.2 7.6.3 7.6.3s5.3 0 8.7-.3c.4-.1 1.2-.1 2-1 .6-.7.8-2.4.8-2.4s.5-2 .5-4v-1.6c0-2-.5-4-.5-4zM9.8 14.7V8.3l6.4 3.2-6.4 3.2z" />
-            </svg>
-          );
-
-          const tiktokIcon = (
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 48 48"
-              fill="#fff"
-              style={{ marginRight: '4px' }}
-            >
-              <path d="M41 14.4c-2.6.2-5.1-.6-7.2-2.3-1.6-1.3-2.7-3-3.1-5H27v23c-.1 2.9-2.6 5.3-5.5 5.2-2.9-.1-5.3-2.6-5.2-5.5.1-2.9 2.6-5.3 5.5-5.2 1 0 2 .4 2.8 1V18c-.9-.1-1.8-.1-2.7 0C14.8 18.3 10 23.5 10 30c0 6.9 5.6 12.5 12.5 12.5S35 36.9 35 30V19.8c2.4 1.7 5.4 2.5 8.3 2.3v-7.7z" />
-            </svg>
-          );
-
-          const icon = isYouTube
-            ? youtubeIcon
-            : isTikTok
-            ? tiktokIcon
-            : '🔗 ';
-
-          return (
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: '#8f7f70',
-                fontSize: '13px',
-                textDecoration: 'underline',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '6px',
-                maxWidth: '480px',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-              {...props}
-            >
-              {icon}
-              <span>{shortened}</span>
-            </a>
-          );
-        },
+    <div
+      className="prose chat-markdown"
+      style={{
+        fontSize: '16px',
+        lineHeight: '1.6',
+        letterSpacing: '0.01em',
+        fontFamily: 'Charter, Georgia, Cambria, "Times New Roman", serif',
       }}
     >
-      {text}
-    </ReactMarkdown>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[rehypeHighlight, rehypeRaw]}
+        components={{
+          p: ({ children }) => (
+            <p style={{ marginTop: '0.75em', marginBottom: '0.75em' }}>
+              {children}
+            </p>
+          ),
+          h1: ({ children }) => (
+            <h1 style={{ fontSize: '24px', fontWeight: 600, marginTop: '1.2em', marginBottom: '0.6em', lineHeight: '1.4' }}>
+              {children}
+            </h1>
+          ),
+          h2: ({ children }) => (
+            <h2 style={{ fontSize: '20px', fontWeight: 600, marginTop: '1.2em', marginBottom: '0.6em', lineHeight: '1.4' }}>
+              {children}
+            </h2>
+          ),
+          h3: ({ children }) => (
+            <h3 style={{ fontSize: '18px', fontWeight: 600, marginTop: '1.2em', marginBottom: '0.6em', lineHeight: '1.4' }}>
+              {children}
+            </h3>
+          ),
+          a: ({ href, children, ...props }) => {
+            const url = href || '#';
+            const shortened = url.length > 50 ? url.slice(0, 45) + '…' : url;
+            const isYouTube =
+              url.includes('youtube.com') || url.includes('youtu.be');
+            const isTikTok = url.includes('tiktok.com');
+
+            const youtubeIcon = (
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="red"
+                style={{ marginRight: '4px' }}
+              >
+                <path d="M23.5 6.2s-.2-1.7-.8-2.4c-.8-.9-1.6-.9-2-1C17.3 2.5 12 2.5 12 2.5h-.1s-5.3 0-8.7.3c-.4.1-1.2.1-2 1C.7 4.5.5 6.2.5 6.2S0 8.2 0 10.2v1.6c0 2 .5 4 .5 4s.2 1.7.8 2.4c.8.9 1.9.9 2.4 1 1.8.2 7.6.3 7.6.3s5.3 0 8.7-.3c.4-.1 1.2-.1 2-1 .6-.7.8-2.4.8-2.4s.5-2 .5-4v-1.6c0-2-.5-4-.5-4zM9.8 14.7V8.3l6.4 3.2-6.4 3.2z" />
+              </svg>
+            );
+
+            const tiktokIcon = (
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 48 48"
+                fill="#fff"
+                style={{ marginRight: '4px' }}
+              >
+                <path d="M41 14.4c-2.6.2-5.1-.6-7.2-2.3-1.6-1.3-2.7-3-3.1-5H27v23c-.1 2.9-2.6 5.3-5.5 5.2-2.9-.1-5.3-2.6-5.2-5.5.1-2.9 2.6-5.3 5.5-5.2 1 0 2 .4 2.8 1V18c-.9-.1-1.8-.1-2.7 0C14.8 18.3 10 23.5 10 30c0 6.9 5.6 12.5 12.5 12.5S35 36.9 35 30V19.8c2.4 1.7 5.4 2.5 8.3 2.3v-7.7z" />
+              </svg>
+            );
+
+            const icon = isYouTube
+              ? youtubeIcon
+              : isTikTok
+              ? tiktokIcon
+              : '🔗 ';
+
+            return (
+              <a
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: '#60a5fa',
+                  fontSize: '16px',
+                  textDecoration: 'underline',
+                  textUnderlineOffset: '2px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  maxWidth: '480px',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+                {...props}
+              >
+                {icon}
+                <span>{shortened}</span>
+              </a>
+            );
+          },
+          code: ({ inline, children, ...props }: any) => {
+            if (inline) {
+              return (
+                <code
+                  style={{
+                    backgroundColor: '#1f1f1f',
+                    color: '#e5e7eb',
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                  }}
+                  {...props}
+                >
+                  {children}
+                </code>
+              );
+            }
+            return <code {...props}>{children}</code>;
+          },
+          pre: ({ children }) => (
+            <pre
+              style={{
+                backgroundColor: '#1f1f1f',
+                padding: '1em 1.2em',
+                borderRadius: '6px',
+                overflowX: 'auto',
+                fontSize: '14px',
+                lineHeight: '1.5',
+                marginTop: '0.75em',
+                marginBottom: '0.75em',
+              }}
+            >
+              {children}
+            </pre>
+          ),
+          ul: ({ children }) => (
+            <ul style={{ paddingLeft: '1.5em', marginTop: '0.75em', marginBottom: '0.75em' }}>
+              {children}
+            </ul>
+          ),
+          ol: ({ children }) => (
+            <ol style={{ paddingLeft: '1.5em', marginTop: '0.75em', marginBottom: '0.75em' }}>
+              {children}
+            </ol>
+          ),
+          li: ({ children }) => (
+            <li style={{ marginTop: '0.25em', marginBottom: '0.25em' }}>
+              {children}
+            </li>
+          ),
+        }}
+      >
+        {text}
+      </ReactMarkdown>
+    </div>
   );
 }
 
@@ -240,7 +322,7 @@ const backendBase = useMemo(() => {
           });
 
           const json = await res.json();
-
+          console.log("THREAD CREATE RESPONSE:", json);
           const newThreadId =
             typeof json?.thread_id === 'string' ? json.thread_id : null;
 

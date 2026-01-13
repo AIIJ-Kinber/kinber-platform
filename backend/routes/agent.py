@@ -5,11 +5,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Any, Dict, List
 
-# Gemini core agent functions
-from backend.services.gemini import ( run_gemini_agent,
-    analyze_image_with_gemini,
-    format_for_agent_search_block
-)
+# OpenAI core agent functions
+from backend.services.openai_agent import run_openai_agent
+from backend.services.gemini import analyze_image_with_gemini
+
 
 # Tool services
 from backend.services.web_search import web_search
@@ -37,7 +36,7 @@ async def agent_root():
 # ---------------------------------------------------
 class AgentRequest(BaseModel):
     message: str
-    model_name: str | None = "gemini-2.0-flash-exp"
+    model_name: str | None = "gpt-4o"
     agent: str | None = "default"
     attachments: List[Dict[str, Any]] | None = None
 
@@ -68,7 +67,7 @@ async def run_agent(body: AgentRequest):
                 vision_blocks.append(f"🖼️ {file.get('name', 'Image')}:\n{desc}\n")
 
         # ----- Main AI -----
-        ai_reply = await run_gemini_agent(
+        ai_reply = await run_openai_agent(
             message,
             agent=agent,
             model_name=model_name,

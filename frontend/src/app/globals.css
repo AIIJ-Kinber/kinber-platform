@@ -1,3 +1,4 @@
+/*kinber-platform\frontend\src\app\globals.css
 /* ==========================================================
    🌙 Kinber Global Styles (Final Unified Version)
    Date: 2025-10-22
@@ -19,7 +20,13 @@ body {
   min-height: 0 !important;     /* ✅ prevents flex children from freezing */
   overflow-x: hidden !important; /* prevent horizontal scroll */
   overflow-y: auto !important;   /* ✅ allow vertical scroll in children (like sidebar) */
-  font-family: var(--font-geist-sans, ui-sans-serif);
+  
+  /* 🔤 Claude's Typography - Charter font with fallbacks */
+  font-family: Charter, Georgia, Cambria, "Times New Roman", serif;
+  font-size: 16px;              /* Claude's base font size */
+  line-height: 1.6;             /* Claude's line height for readability */
+  letter-spacing: 0.01em;       /* Subtle spacing */
+  
   background-color: #2a2a2a !important; /* unified dark-grey background */
   color: #e5e7eb !important;
 }
@@ -72,15 +79,35 @@ body {
 /* ---------- Markdown / Chat Message Styling ---------- */
 .prose.chat-markdown {
   color: var(--foreground);
-  line-height: 1.6;
+  font-size: 16px;              /* Claude's base size */
+  line-height: 1.6;             /* Claude's line height */
+  letter-spacing: 0.01em;       /* Subtle spacing */
+}
+
+.prose.chat-markdown p {
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
 }
 
 .prose.chat-markdown h1,
 .prose.chat-markdown h2,
 .prose.chat-markdown h3 {
   font-weight: 600;
-  margin-top: 0.8em;
-  margin-bottom: 0.4em;
+  margin-top: 1.2em;
+  margin-bottom: 0.6em;
+  line-height: 1.4;
+}
+
+.prose.chat-markdown h1 {
+  font-size: 24px;
+}
+
+.prose.chat-markdown h2 {
+  font-size: 20px;
+}
+
+.prose.chat-markdown h3 {
+  font-size: 18px;
 }
 
 .prose.chat-markdown code {
@@ -88,20 +115,48 @@ body {
   color: #e5e7eb;
   padding: 2px 6px;
   border-radius: 4px;
-  font-size: 0.9em;
-  font-family: var(--font-mono, ui-monospace);
+  font-size: 14px;              /* Slightly smaller for code */
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .prose.chat-markdown pre {
   background-color: #1f1f1f;
-  padding: 0.75em 1em;
+  padding: 1em 1.2em;
   border-radius: 6px;
   overflow-x: auto;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.prose.chat-markdown pre code {
+  padding: 0;
+  background-color: transparent;
 }
 
 .prose.chat-markdown ul,
 .prose.chat-markdown ol {
   padding-left: 1.5em;
+  margin-top: 0.75em;
+  margin-bottom: 0.75em;
+}
+
+.prose.chat-markdown li {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+.prose.chat-markdown strong {
+  font-weight: 600;
+}
+
+.prose.chat-markdown a {
+  color: #60a5fa;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.prose.chat-markdown a:hover {
+  color: #93c5fd;
 }
 
 /* ---------- Utility Classes ---------- */
