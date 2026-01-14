@@ -1,78 +1,35 @@
 # ===============================
-# Environment files (IMPORTANT)
+# Core Backend
 # ===============================
-.env
-.env.*
-.env.local
-.env.*.local
-!.env.example
+fastapi
+uvicorn[standard]
+python-dotenv
 
 # ===============================
-# Dependencies
+# AI / LLM Providers
 # ===============================
-node_modules/
-.pnp/
-.pnp.js
-.yarn/install-state.gz
+openai==1.40.6
+anthropic==0.34.2
+google-generativeai==0.7.2
 
 # ===============================
-# Next.js
+# Supabase
 # ===============================
-.next/
-out/
-build/
-dist/
+supabase==2.4.5
 
 # ===============================
-# Testing / Coverage
+# Async / Cache
 # ===============================
-coverage/
+redis==6.2.0
+aioredis==2.0.1
 
 # ===============================
-# Logs
+# Document Processing
 # ===============================
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
+PyPDF2
+pdfplumber
 
 # ===============================
-# OS / Editor junk
+# Networking (IMPORTANT – proxy fix)
 # ===============================
-.DS_Store
-*.pem
-
-# ===============================
-# Vercel
-# ===============================
-.vercel
-
-# ===============================
-# TypeScript
-# ===============================
-*.tsbuildinfo
-next-env.d.ts
-
-# ===============================
-# Python
-# ===============================
-__pycache__/
-*.pyc
-.venv/
-venv/
-
-# ===============================
-# Supabase local/testing
-# ===============================
-supabase/.branches
-supabase/.temp
-supabase/**/*.env
-
-# ===============================
-# Misc
-# ===============================
-**/.prompts/
-
-# ===============================
-# Sentry
-# ===============================
-.env.sentry-build-plugin
+httpx==0.27.2
