@@ -1,35 +1,38 @@
 # ===============================
-# Core Backend
+# Environment files
 # ===============================
-fastapi
-uvicorn[standard]
-python-dotenv
+.env
+.env.local
+.env.*.local
 
 # ===============================
-# AI / LLM Providers
+# Node / Next.js
 # ===============================
-openai==1.40.6
-anthropic==0.34.2
-google-generativeai==0.7.2
+node_modules/
+.next/
+out/
+dist/
 
 # ===============================
-# Supabase
+# Logs
 # ===============================
-supabase==2.4.5
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # ===============================
-# Async / Cache
+# OS / Editor
 # ===============================
-redis==6.2.0
-aioredis==2.0.1
+.DS_Store
 
 # ===============================
-# Document Processing
+# Vercel
 # ===============================
-PyPDF2
-pdfplumber
+.vercel
 
 # ===============================
-# Networking (IMPORTANT – proxy fix)
+# TypeScript
 # ===============================
-httpx==0.27.2
+*.tsbuildinfo
+next-env.d.ts
+
