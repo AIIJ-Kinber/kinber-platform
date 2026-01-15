@@ -340,6 +340,15 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
     // Initial token load on mount
     useEffect(() => {
       const loadToken = async () => {
+        // First check if user explicitly disconnected (localStorage check)
+        const wasDisconnected = localStorage.getItem("google_drive_disconnected");
+        if (wasDisconnected === "true") {
+          console.log('🚫 Drive was manually disconnected, staying disconnected');
+          setAccessToken(null);
+          return;
+        }
+
+        // Otherwise load from Supabase session
         const { data } = await supabase.auth.getSession();
         const token = (data.session as any)?.provider_token || null;
         if (token) {
@@ -353,10 +362,13 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
         /* ---------------------------------------------------------
        Disconnect Google Drive (clear token + notify UI)
     --------------------------------------------------------- */
-    const disconnectGoogleDrive = React.useCallback(() => {
+    const disconnectGoogleDrive = React.useCallback(async () => {
       console.log("🔌 Disconnecting Google Drive…");
 
-      // Remove stored token
+      // Set disconnected flag in localStorage
+      localStorage.setItem("google_drive_disconnected", "true");
+      
+      // Remove stored token from localStorage
       localStorage.removeItem("google_access_token");
 
       // Update local UI immediately
@@ -598,6 +610,10 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
           console.log(
             '✔ GIS access token received inside openGoogleDrivePicker'
           );
+          
+          // Clear the disconnected flag when user reconnects
+          localStorage.removeItem("google_drive_disconnected");
+          
           setAccessToken(response.access_token);
           buildAndOpenPicker(response.access_token);
         };
@@ -793,7 +809,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               <div className="relative" ref={plusRef}>
                 <button
                   onClick={() => setIsPlusOpen((p) => !p)}
-                  className="flex items-center gap-1 text-sm hover:text-white"
+                  className="flex items-center gap-1 text-sm hover:text-white cursor-pointer transition-colors"
                 >
                   <span className="-mt-1 text-2xl font-light">+</span>
                 </button>
@@ -830,7 +846,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                       <button
                         key={key}
                         onClick={() => handleToolAction(key)}
-                        className="flex items-center gap-3 w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-[#3a3a3a]"
+                        className="flex items-center gap-3 w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-[#3a3a3a] cursor-pointer transition-colors"
                       >
                         {icon}
                         <span>{label}</span>
@@ -841,7 +857,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                     {accessToken && (
                       <button
                         onClick={disconnectGoogleDrive}
-                        className="flex items-center gap-3 w-full px-4 py-2 mt-1 text-red-400 hover:text-red-300 hover:bg-[#3a3a3a]"
+                        className="flex items-center gap-3 w-full px-4 py-2 mt-1 text-red-400 hover:text-red-300 hover:bg-[#3a3a3a] cursor-pointer transition-colors"
                       >
                         <span className="text-sm">Disconnect Drive</span>
                       </button>
@@ -854,7 +870,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               <div className="relative" ref={toolsRef}>
                 <button
                   onClick={() => setIsToolsOpen((prev) => !prev)}
-                  className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition"
+                  className="flex items-center gap-2 text-sm text-gray-400 hover:text-white cursor-pointer transition-colors"
                 >
                   <Settings className="w-4 h-4" />
                   <span className="font-medium">Tools</span>
@@ -883,7 +899,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                           console.log(label);
                           setIsToolsOpen(false);
                         }}
-                        className="flex items-center w-full gap-3 px-4 py-2 text-gray-300 hover:text-white hover:bg-[#3a3a3a] transition-all"
+                        className="flex items-center w-full gap-3 px-4 py-2 text-gray-300 hover:text-white hover:bg-[#3a3a3a] cursor-pointer transition-colors"
                       >
                         {icon}
                         <span className="text-sm">{label}</span>
@@ -899,7 +915,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
               <div className="relative" ref={agentRef}>
                 <button
                   onClick={() => setIsAgentOpen((p) => !p)}
-                  className="flex items-center gap-2 text-sm text-gray-400 hover:text-white"
+                  className="flex items-center gap-2 text-sm text-gray-400 hover:text-white cursor-pointer transition-colors"
                 >
                   <Image
                     src={SelectIcon}
@@ -934,7 +950,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                           setSelectedAgent(label);
                           setIsAgentOpen(false);
                         }}
-                        className="flex items-center gap-3 w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-[#3a3a3a]"
+                        className="flex items-center gap-3 w-full px-4 py-2 text-gray-300 hover:text-white hover:bg-[#3a3a3a] cursor-pointer transition-colors"
                       >
                         <div className="w-3 h-3 rounded-full border border-gray-400" />
                         <span>{label}</span>
@@ -971,41 +987,61 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
                 disabled={
                   inputValue.trim().length === 0 && attachedFiles.length === 0
                 }
+                style={{
+                  backgroundColor: inputValue.trim().length > 0 || attachedFiles.length > 0 
+                    ? '#f97316' 
+                    : '#2a2a2a',
+                }}
                 className={cn(
-                  'flex items-center justify-center w-8 h-8 rounded-full transition-all',
+                  'flex items-center justify-center rounded-full transition-all duration-200',
+                  'w-10 h-10',
                   inputValue.trim().length > 0 || attachedFiles.length > 0
-                    ? 'bg-white text-black shadow'
-                    : 'border border-zinc-700 text-zinc-500'
+                    ? 'hover:bg-orange-600 cursor-pointer shadow-md'
+                    : 'border border-zinc-700 cursor-not-allowed'
                 )}
               >
                 {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  <Loader2
+                    className={cn(
+                      'h-5 w-5 animate-spin',
+                      inputValue.trim().length > 0 || attachedFiles.length > 0
+                        ? 'text-white'
+                        : 'text-zinc-500'
+                    )}
+                  />
                 ) : (
-                  <ArrowUp className="h-4 w-4 text-white" />
+                  <ArrowUp
+                    className={cn(
+                      'h-5 w-5 transition-colors',
+                      inputValue.trim().length > 0 || attachedFiles.length > 0
+                        ? 'text-white'
+                        : 'text-zinc-500'
+                    )}
+                  />
                 )}
               </MotionButton>
             </div>
           </div>
-        </div>
 
-        {/* QUICK ACTION BUTTONS */}
-        <div className="w-full flex flex-wrap justify-center gap-3 mt-5 mb-2">
-          {[
-            { label: 'Image', icon: <ImageIcon className="w-4 h-4" /> },
-            { label: 'Slides', icon: <SlidesIcon className="w-4 h-4" /> },
-            { label: 'Research', icon: <ResearchIcon className="w-4 h-4" /> },
-            { label: 'Data', icon: <DataIcon className="w-4 h-4" /> },
-            { label: 'Travel', icon: <TravelIcon className="w-4 h-4" /> },
-            { label: 'More', icon: <MoreIcon className="w-4 h-4" /> },
-          ].map((t) => (
-            <button
-              key={t.label}
-              className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#2a2a2a] border border-neutral-700 text-sm text-gray-300 hover:bg-[#3a3a3a]"
-            >
-              {t.icon}
-              <span>{t.label}</span>
-            </button>
-          ))}
+          {/* QUICK ACTION BUTTONS */}
+          <div className="w-full flex flex-wrap justify-center gap-3 mt-5 mb-2">
+            {[
+              { label: 'Image', icon: <ImageIcon className="w-4 h-4" /> },
+              { label: 'Slides', icon: <SlidesIcon className="w-4 h-4" /> },
+              { label: 'Research', icon: <ResearchIcon className="w-4 h-4" /> },
+              { label: 'Data', icon: <DataIcon className="w-4 h-4" /> },
+              { label: 'Travel', icon: <TravelIcon className="w-4 h-4" /> },
+              { label: 'More', icon: <MoreIcon className="w-4 h-4" /> },
+            ].map((t) => (
+              <button
+                key={t.label}
+                className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#2a2a2a] border border-neutral-700 text-sm text-gray-300 hover:bg-[#3a3a3a]"
+              >
+                {t.icon}
+                <span>{t.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );
