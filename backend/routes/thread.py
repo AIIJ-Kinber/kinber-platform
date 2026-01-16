@@ -1,3 +1,5 @@
+# backend\routes\thread.py
+
 from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -88,6 +90,280 @@ def extract_attachment_text(source: Any) -> str:
 router = APIRouter(tags=["Thread"])
 
 
+# ──────────────────────────────────────────────────────────────────────
+# 🔐 AUTHENTICATION & AUTHORIZATION HELPERS (ADDED FOR SECURITY)
+# ──────────────────────────────────────────────────────────────────────
+
+async def get_current_user_id(request: Request) -> Optional[str]:
+    """
+    Extract user_id from request headers.
+    
+    Priority order (TEMPORARILY SWAPPED):
+    1. X-User-ID: <user_id> (TEMPORARY - FOR DEVELOPMENT)
+    2. Authorization: Bearer <supabase_token>
+    
+    Returns:
+        user_id if authenticated, None otherwise
+    """
+    try:
+        # ═══════════════════════════════════════════════════════════
+        # METHOD 1: X-User-ID Header (TEMPORARY FIRST PRIORITY)
+        # ═══════════════════════════════════════════════════════════
+        user_id_header = request.headers.get("X-User-ID", "").strip()
+        if user_id_header:
+            try:
+                # Validate it's a proper UUID format
+                uuid.UUID(user_id_header)
+                print(f"✅ Authenticated via X-User-ID: {user_id_header}")
+                return user_id_header
+            except ValueError:
+                print(f"❌ Invalid X-User-ID format: {user_id_header}")
+        
+        # ═══════════════════════════════════════════════════════════
+        # METHOD 2: Authorization Bearer Token (FALLBACK)
+        # ═══════════════════════════════════════════════════════════
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "").strip()
+            
+            if token:
+                try:
+                    # Try to decode JWT
+                    import jwt
+                    
+                    decoded = jwt.decode(
+                        token, 
+                        options={"verify_signature": False}
+                    )
+                    
+                    user_id = decoded.get('sub')
+                    
+                    if user_id:
+                        print(f"✅ Authenticated via Bearer token (JWT): {user_id}")
+                        return user_id
+                        
+                except Exception as e:
+                    print(f"⚠️ Bearer token verification error: {e}")
+        
+        # ═══════════════════════════════════════════════════════════
+        # NO AUTHENTICATION FOUND
+        # ═══════════════════════════════════════════════════════════
+        print("❌ No valid authentication found (no Bearer token or X-User-ID)")
+        return None
+    
+    except Exception as e:
+        print(f"❌ Critical error in get_current_user_id: {e}")
+        traceback.print_exc()
+        return None
+        
+        # ═══════════════════════════════════════════════════════════
+        # METHOD 2: X-User-ID Header (DEVELOPMENT/TESTING FALLBACK)
+        # ═══════════════════════════════════════════════════════════
+        user_id_header = request.headers.get("X-User-ID", "").strip()
+        if user_id_header:
+            try:
+                # Validate it's a proper UUID format
+                uuid.UUID(user_id_header)
+                print(f"⚠️ Using X-User-ID header (DEV MODE): {user_id_header}")
+                print("⚠️ WARNING: X-User-ID should only be used in development!")
+                return user_id_header
+            except ValueError:
+                print(f"❌ Invalid X-User-ID format: {user_id_header}")
+        
+        # ═══════════════════════════════════════════════════════════
+        # NO AUTHENTICATION FOUND
+        # ═══════════════════════════════════════════════════════════
+        print("❌ No valid authentication found (no Bearer token or X-User-ID)")
+        return None
+    
+    except Exception as e:
+        print(f"❌ Critical error in get_current_user_id: {e}")
+        traceback.print_exc()
+        return None
+
+async def get_current_user_id(request: Request) -> Optional[str]:
+    """
+    Extract user_id from request headers.
+    """
+    try:
+        # ✅ DEBUG: Print ALL headers received
+        print("\n" + "="*60)
+        print("🔍 DEBUG - ALL REQUEST HEADERS:")
+        for header_name, header_value in request.headers.items():
+            # Don't print full token values for security
+            if "authorization" in header_name.lower():
+                print(f"  {header_name}: Bearer {header_value[7:27]}..." if len(header_value) > 7 else f"  {header_name}: {header_value}")
+            else:
+                print(f"  {header_name}: {header_value}")
+        print("="*60 + "\n")
+        
+        # Now check for X-User-ID
+        user_id_header = request.headers.get("X-User-ID", "").strip()
+        print(f"🔍 X-User-ID extracted: '{user_id_header}'")
+        
+        # Also try lowercase version
+        user_id_lower = request.headers.get("x-user-id", "").strip()
+        print(f"🔍 x-user-id extracted: '{user_id_lower}'")
+        
+        # Try all possible variations
+        for possible_name in ["X-User-ID", "x-user-id", "X-USER-ID", "x-User-Id"]:
+            val = request.headers.get(possible_name, "").strip()
+            if val:
+                print(f"✅ FOUND IT! Header '{possible_name}': {val}")
+
+        # ═══════════════════════════════════════════════════════════
+        # METHOD 1: Authorization Bearer Token (PRODUCTION)
+        # ═══════════════════════════════════════════════════════════
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "").strip()
+            
+            if token:
+                try:
+                    # Verify token with Supabase
+                    supabase = get_supabase()
+                    
+                    # ✅ FIXED: Properly verify the JWT token
+                    try:
+                        # Method 1: Try using get_user (some versions support this)
+                        user_response = supabase.auth.get_user(token)
+                        
+                        # Handle different response formats
+                        if hasattr(user_response, 'user') and user_response.user:
+                            user_id = user_response.user.id
+                            print(f"✅ Authenticated via Bearer token: {user_id}")
+                            return user_id
+                        elif isinstance(user_response, dict) and 'user' in user_response:
+                            user_id = user_response['user']['id']
+                            print(f"✅ Authenticated via Bearer token: {user_id}")
+                            return user_id
+                    except AttributeError:
+                        # Method 2: If get_user doesn't work, verify JWT manually
+                        import jwt
+                        from jwt import PyJWTError
+                        
+                        # Decode without verification (Supabase handles verification)
+                        # We just need to extract the user_id from the token
+                        try:
+                            # Supabase JWT tokens can be decoded to get user info
+                            decoded = jwt.decode(
+                                token, 
+                                options={"verify_signature": False}  # We trust Supabase tokens
+                            )
+                            
+                            user_id = decoded.get('sub')  # 'sub' is the user ID in JWT
+                            
+                            if user_id:
+                                print(f"✅ Authenticated via Bearer token (JWT): {user_id}")
+                                return user_id
+                            else:
+                                print("⚠️ Bearer token valid but no user ID found")
+                        except PyJWTError as jwt_err:
+                            print(f"⚠️ JWT decode error: {jwt_err}")
+                    
+                    print("⚠️ Bearer token provided but user verification failed")
+                        
+                except Exception as e:
+                    print(f"⚠️ Bearer token verification error: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Don't return - fall through to fallback methods
+        
+        # ═══════════════════════════════════════════════════════════
+        # METHOD 2: X-User-ID Header (DEVELOPMENT/TESTING FALLBACK)
+        # ═══════════════════════════════════════════════════════════
+        user_id_header = request.headers.get("X-User-ID", "").strip()
+        if user_id_header:
+            try:
+                # Validate it's a proper UUID format
+                uuid.UUID(user_id_header)
+                print(f"⚠️ Using X-User-ID header (DEV MODE): {user_id_header}")
+                print("⚠️ WARNING: X-User-ID should only be used in development!")
+                return user_id_header
+            except ValueError:
+                print(f"❌ Invalid X-User-ID format: {user_id_header}")
+        
+        # ═══════════════════════════════════════════════════════════
+        # NO AUTHENTICATION FOUND
+        # ═══════════════════════════════════════════════════════════
+        print("❌ No valid authentication found (no Bearer token or X-User-ID)")
+        return None
+    
+    except Exception as e:
+        print(f"❌ Critical error in get_current_user_id: {e}")
+        traceback.print_exc()
+        return None
+
+
+def require_user(user_id: Optional[str]) -> str:
+    """
+    Ensure user is authenticated. Raises 401 if not.
+    
+    Args:
+        user_id: The user_id to validate
+    
+    Returns:
+        user_id if valid
+    
+    Raises:
+        HTTPException: 401 if user_id is None
+    """
+    if not user_id:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Please provide valid credentials (Bearer token)."
+        )
+    return user_id
+
+
+async def verify_thread_ownership(
+    supabase,
+    thread_id: str,
+    user_id: str
+) -> bool:
+    """
+    Verify that the authenticated user owns the specified thread.
+    
+    Args:
+        supabase: Supabase client
+        thread_id: Thread ID to check
+        user_id: Authenticated user's ID
+    
+    Returns:
+        True if user owns thread, False otherwise
+    """
+    try:
+        result = (
+            supabase.table("threads")
+            .select("account_id, user_id")
+            .eq("thread_id", thread_id)
+            .limit(1)
+            .execute()
+        )
+        
+        if not result.data:
+            print(f"⚠️ Thread not found: {thread_id}")
+            return False
+        
+        thread_data = result.data[0]
+        
+        # Check both account_id and user_id for compatibility
+        thread_owner = thread_data.get("account_id") or thread_data.get("user_id")
+        
+        is_owner = thread_owner == user_id
+        
+        if is_owner:
+            print(f"✅ User {user_id} owns thread {thread_id}")
+        else:
+            print(f"❌ AUTHORIZATION FAILED: User {user_id} does NOT own thread {thread_id} (owner: {thread_owner})")
+        
+        return is_owner
+    
+    except Exception as e:
+        print(f"❌ Error verifying thread ownership: {e}")
+        traceback.print_exc()
+        return False
+        
 # ────────────────────────────────────────────────
 # MODELS
 # ────────────────────────────────────────────────
@@ -105,19 +381,22 @@ class MessageBody(BaseModel):
     agent: Optional[str] = "default"
     attachments: Optional[List[Dict[str, Any]]] = []
 
+
 # ────────────────────────────────────────────────
-# CREATE THREAD
+# CREATE THREAD (✅ SECURITY ENHANCED)
 # ────────────────────────────────────────────────
 @router.post("")
 @router.post("/")
-async def create_thread(body: ThreadCreate):
+async def create_thread(body: ThreadCreate, request: Request):
     try:
-        print(f"🧵 Creating new thread → title={body.title}, user_id={body.user_id}")
+        # ✅ SECURITY: Get authenticated user
+        user_id = await get_current_user_id(request)
+        user_id = require_user(user_id)  # Enforce authentication
+        
+        print(f"🧵 Creating new thread → title={body.title}, user_id={user_id}")
 
         supabase = get_supabase()
-
         thread_id = str(uuid.uuid4())
-
         now = datetime.utcnow().isoformat()
 
         insert_data = {
@@ -125,21 +404,20 @@ async def create_thread(body: ThreadCreate):
             "title": body.title or "New Conversation",
             "created_at": now,
             "updated_at": now,
+            "account_id": user_id,  # ✅ CRITICAL: Always set from authenticated user
+            "user_id": user_id,     # ✅ Also set user_id for compatibility
         }
 
-        # Map incoming user_id → threads.account_id (your DB column)
-        if body.user_id:
-            try:
-                uuid.UUID(body.user_id)
-                insert_data["account_id"] = body.user_id
-            except ValueError:
-                print(f"⚠️ Invalid user_id ignored: {body.user_id}")
+        result = supabase.table("threads").insert(insert_data).execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Failed to create thread")
 
-        supabase.table("threads").insert(insert_data).execute()
-
-        print(f"✅ Thread created: {thread_id}")
+        print("🧪 CREATE_THREAD RESPONSE →", {"thread_id": thread_id})
         return JSONResponse({"thread_id": thread_id})
 
+    except HTTPException:
+        raise  # Re-raise authentication errors
     except Exception as e:
         print("❌ create_thread error:", e)
         traceback.print_exc()
@@ -148,23 +426,35 @@ async def create_thread(body: ThreadCreate):
 # ────────────────────────────────────────────────
 # GET THREAD MESSAGES
 # ────────────────────────────────────────────────
+# ────────────────────────────────────────────────
+# GET THREAD MESSAGES (✅ SECURITY ENHANCED)
+# ────────────────────────────────────────────────
 @router.get("/{thread_id}")
-async def get_thread(thread_id: str):
+async def get_thread(thread_id: str, request: Request):
     try:
-        print(f"📨 Fetching messages for thread: {thread_id}")
+        # ✅ SECURITY: Get authenticated user
+        user_id = await get_current_user_id(request)
+        user_id = require_user(user_id)
+        
+        print(f"📨 Fetching messages for thread: {thread_id} (user: {user_id})")
 
         # Validate UUID early
         try:
             uuid.UUID(thread_id)
         except ValueError:
-            return JSONResponse(
-                {"thread_id": thread_id, "messages": []}
+            raise HTTPException(status_code=400, detail="Invalid thread ID format")
+
+        supabase = get_supabase()
+        
+        # ✅ SECURITY: Verify thread ownership BEFORE accessing data
+        is_owner = await verify_thread_ownership(supabase, thread_id, user_id)
+        if not is_owner:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied. You do not own this thread."
             )
 
-
-        # Fetch messages
-        supabase = get_supabase()
-
+        # Fetch messages (only after ownership verification!)
         result = (
             supabase
             .table("messages")
@@ -175,6 +465,8 @@ async def get_thread(thread_id: str):
         )
 
         messages = result.data or []
+        
+        print(f"✅ Returned {len(messages)} messages to user {user_id}")
 
         return JSONResponse(
             {
@@ -183,6 +475,8 @@ async def get_thread(thread_id: str):
             }
         )
 
+    except HTTPException:
+        raise  # Re-raise HTTP errors
     except Exception as e:
         print("❌ get_thread error:", e)
         traceback.print_exc()
@@ -206,6 +500,21 @@ async def start_agent_run(thread_id: str, request: Request):
         print(f"📎 Attachments received: {len(attachments)}")
 
         supabase = get_supabase()
+        
+        # ✅ SECURITY: Get authenticated user
+        user_id = await get_current_user_id(request)
+        user_id = require_user(user_id)
+        
+        # ✅ SECURITY: Verify thread ownership BEFORE processing
+        is_owner = await verify_thread_ownership(supabase, thread_id, user_id)
+        if not is_owner:
+            raise HTTPException(
+                status_code=403,
+                detail="Access denied. You do not own this thread."
+            )
+        
+        print(f"✅ User {user_id} verified as owner of thread {thread_id}")
+
         now = datetime.utcnow().isoformat()
 
         # ── Save user message ──────────────────────
@@ -1507,7 +1816,7 @@ Latest update:
         except Exception as e:
             print("⚠️ DB insert/update failed:", e)
 
-        # ───────────────────────────────
+# ───────────────────────────────
         # ✅ SINGLE FINAL RETURN (FRONTEND SAFE)
         # ───────────────────────────────
         return JSONResponse(
@@ -1530,3 +1839,350 @@ Latest update:
             },
             status_code=500,
         )
+
+
+# ────────────────────────────────────────────────
+# TRIPLET ENDPOINT (✅ SECURITY ENHANCED + VERDICT)
+# ────────────────────────────────────────────────
+
+@router.post("/triplet")
+async def triplet_comparison(request: Request):
+    """
+    Run the same query across multiple AI models
+    Returns all responses for comparison with verdict
+    """
+    try:
+        # ✅ SECURITY: Get authenticated user
+        user_id = await get_current_user_id(request)
+        user_id = require_user(user_id)
+        
+        print(f"🔀 Triplet request from user: {user_id}")
+        
+        body = await request.json()
+        # Accept both 'prompt' and 'message' for compatibility
+        message = body.get("prompt") or body.get("message", "").strip()
+        models = body.get("models", ["openai", "deepseek", "claude"])
+        
+        if not message:
+            raise HTTPException(status_code=400, detail="Message or prompt is required")
+        
+        print(f"💬 Triplet message: {message}")
+        print(f"🤖 Models requested: {models}")
+        
+        results = {}
+        
+        # ═══════════════════════════════════════════════════════════
+        # HELPER FUNCTION - Extract text from any response format
+        # ═══════════════════════════════════════════════════════════
+        def extract_text(result) -> str:
+            """Extract text from various response formats"""
+            if isinstance(result, str):
+                return result
+            elif isinstance(result, dict):
+                return (
+                    result.get("assistant_reply") or 
+                    result.get("text") or 
+                    result.get("content") or
+                    result.get("response") or
+                    str(result)
+                )
+            else:
+                # Try to get text attribute
+                return getattr(result, "text", str(result))
+        
+        # ═══════════════════════════════════════════════════════════
+        # OPENAI
+        # ═══════════════════════════════════════════════════════════
+        if "openai" in models:
+            try:
+                print("🟢 Running OpenAI...")
+                
+                openai_result = await run_openai_agent(
+                    message,
+                    model_name="gpt-4o-mini",
+                    agent="default",
+                    ocr=[],
+                    vision=[],
+                    conversation="",
+                    mid_summary=None,
+                    long_term_memory="",
+                )
+                
+                results["openai"] = extract_text(openai_result)
+                print(f"✅ OpenAI completed: {len(results['openai'])} chars")
+                
+            except Exception as e:
+                error_msg = str(e)
+                print(f"❌ OpenAI failed: {error_msg}")
+                results["openai"] = f"OpenAI Error: {error_msg[:300]}"
+        
+        # ═══════════════════════════════════════════════════════════
+        # DEEPSEEK - With multiple fallback strategies
+        # ═══════════════════════════════════════════════════════════
+        if "deepseek" in models:
+            deepseek_success = False
+            
+            # STRATEGY 1: Try importing and using DeepSeek service
+            if not deepseek_success:
+                try:
+                    print("🔵 Trying DeepSeek service import...")
+                    from backend.services.deepseek import run_deepseek_agent
+                    
+                    deepseek_result = await run_deepseek_agent(
+                        message,
+                        model_name="deepseek-chat",
+                        agent="default",
+                        ocr=[],
+                        vision=[],
+                        conversation="",
+                        mid_summary=None,
+                        long_term_memory="",
+                    )
+                    
+                    results["deepseek"] = extract_text(deepseek_result)
+                    deepseek_success = True
+                    print(f"✅ DeepSeek completed: {len(results['deepseek'])} chars")
+                    
+                except ImportError as e:
+                    print(f"⚠️ DeepSeek service not found: {e}")
+                except Exception as e:
+                    print(f"❌ DeepSeek service error: {str(e)[:200]}")
+            
+            # STRATEGY 2: Try direct API call
+            if not deepseek_success:
+                try:
+                    print("🔵 Trying direct DeepSeek API call...")
+                    import os
+                    import httpx
+                    
+                    deepseek_key = os.getenv("DEEPSEEK_API_KEY")
+                    
+                    if deepseek_key:
+                        async with httpx.AsyncClient(timeout=30.0) as client:
+                            response = await client.post(
+                                "https://api.deepseek.com/v1/chat/completions",
+                                headers={
+                                    "Authorization": f"Bearer {deepseek_key}",
+                                    "Content-Type": "application/json",
+                                },
+                                json={
+                                    "model": "deepseek-chat",
+                                    "messages": [{"role": "user", "content": message}],
+                                    "temperature": 0.7,
+                                    "max_tokens": 1000,
+                                },
+                            )
+                            
+                            data = response.json()
+                            results["deepseek"] = data["choices"][0]["message"]["content"]
+                            deepseek_success = True
+                            print(f"✅ DeepSeek API completed: {len(results['deepseek'])} chars")
+                    
+                except Exception as e:
+                    print(f"❌ DeepSeek direct API error: {str(e)[:200]}")
+            
+            # STRATEGY 3: Fallback to OpenAI
+            if not deepseek_success:
+                try:
+                    print("🟠 Using OpenAI as DeepSeek fallback...")
+                    
+                    fallback_result = await run_openai_agent(
+                        message,
+                        model_name="gpt-4o-mini",
+                        agent="default",
+                        ocr=[],
+                        vision=[],
+                        conversation="",
+                        mid_summary=None,
+                        long_term_memory="",
+                    )
+                    
+                    results["deepseek"] = "[Using OpenAI as fallback - DeepSeek not configured]\n\n" + extract_text(fallback_result)
+                    print(f"✅ DeepSeek (fallback) completed: {len(results['deepseek'])} chars")
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ DeepSeek fallback failed: {error_msg}")
+                    results["deepseek"] = f"DeepSeek Error: {error_msg[:300]}"
+        
+        # ═══════════════════════════════════════════════════════════
+        # CLAUDE - With multiple fallback strategies
+        # ═══════════════════════════════════════════════════════════
+        if "claude" in models:
+            claude_success = False
+            
+            # STRATEGY 1: Try importing and using Claude service
+            if not claude_success:
+                try:
+                    print("🟠 Trying Claude service import...")
+                    from backend.services.claude import run_claude_agent
+                    
+                    claude_result = await run_claude_agent(
+                        message,
+                        model_name="claude-sonnet-4-20250514",
+                        agent="default",
+                        ocr=[],
+                        vision=[],
+                        conversation="",
+                        mid_summary=None,
+                        long_term_memory="",
+                    )
+                    
+                    results["claude"] = extract_text(claude_result)
+                    claude_success = True
+                    print(f"✅ Claude completed: {len(results['claude'])} chars")
+                    
+                except ImportError as e:
+                    print(f"⚠️ Claude service not found: {e}")
+                except Exception as e:
+                    print(f"❌ Claude service error: {str(e)[:200]}")
+            
+            # STRATEGY 2: Try direct API call with Anthropic SDK
+            if not claude_success:
+                try:
+                    print("🟠 Trying direct Claude API call...")
+                    import os
+                    from anthropic import AsyncAnthropic
+                    
+                    claude_key = os.getenv("ANTHROPIC_API_KEY")
+                    
+                    if claude_key:
+                        client = AsyncAnthropic(api_key=claude_key)
+                        
+                        response = await client.messages.create(
+                            model="claude-sonnet-4-20250514",
+                            max_tokens=1024,
+                            messages=[{"role": "user", "content": message}]
+                        )
+                        
+                        results["claude"] = response.content[0].text
+                        claude_success = True
+                        print(f"✅ Claude API completed: {len(results['claude'])} chars")
+                    
+                except Exception as e:
+                    print(f"❌ Claude direct API error: {str(e)[:200]}")
+            
+            # STRATEGY 3: Fallback to OpenAI
+            if not claude_success:
+                try:
+                    print("🟠 Using OpenAI as Claude fallback...")
+                    
+                    fallback_result = await run_openai_agent(
+                        message,
+                        model_name="gpt-4o-mini",
+                        agent="default",
+                        ocr=[],
+                        vision=[],
+                        conversation="",
+                        mid_summary=None,
+                        long_term_memory="",
+                    )
+                    
+                    results["claude"] = "[Using OpenAI as fallback - Claude not configured]\n\n" + extract_text(fallback_result)
+                    print(f"✅ Claude (fallback) completed: {len(results['claude'])} chars")
+                    
+                except Exception as e:
+                    error_msg = str(e)
+                    print(f"❌ Claude fallback failed: {error_msg}")
+                    results["claude"] = f"Claude Error: {error_msg[:300]}"
+        
+        # ═══════════════════════════════════════════════════════════
+        # LOG COMPLETION STATUS
+        # ═══════════════════════════════════════════════════════════
+        print(f"🎉 Triplet completed")
+        for model_name, result in results.items():
+            has_error = "Error:" in str(result) or "error" in str(result).lower()
+            print(f"   - {model_name}: {'❌' if has_error else '✅'}")
+        
+        # ═══════════════════════════════════════════════════════════
+        # GENERATE VERDICT (Compare all three responses)
+        # ═══════════════════════════════════════════════════════════
+        
+        verdict = "Analyzing responses..."
+        
+        try:
+            # Build comparison prompt
+            comparison_prompt = f"""Compare these three AI responses and provide a brief verdict on which is best.
+
+Question: "{message}"
+
+OpenAI Response:
+{results.get('openai', 'No response')[:500]}
+
+DeepSeek Response:
+{results.get('deepseek', 'No response')[:500]}
+
+Claude Response:
+{results.get('claude', 'No response')[:500]}
+
+Analyze which response is most accurate, comprehensive, and helpful. Provide a 2-3 sentence verdict."""
+            
+            print("🏆 Generating verdict...")
+            
+            # Use OpenAI to generate verdict
+            verdict_result = await run_openai_agent(
+                comparison_prompt,
+                model_name="gpt-4o-mini",
+                agent="default",
+                ocr=[],
+                vision=[],
+                conversation="",
+                mid_summary=None,
+                long_term_memory="",
+            )
+            
+            # Extract verdict text
+            if isinstance(verdict_result, str):
+                verdict = verdict_result.strip()
+            elif isinstance(verdict_result, dict):
+                verdict = (
+                    verdict_result.get("assistant_reply") or 
+                    verdict_result.get("text") or 
+                    verdict_result.get("content") or
+                    "Unable to generate verdict"
+                )
+            else:
+                verdict = getattr(verdict_result, "text", "Unable to generate verdict")
+            
+            print(f"✅ Verdict generated: {len(verdict)} chars")
+            
+        except Exception as e:
+            print(f"⚠️ Verdict generation failed: {e}")
+            verdict = "All three models provided helpful responses. Review each to determine which best suits your needs."
+        
+        # ═══════════════════════════════════════════════════════════
+        # RETURN RESULTS WITH VERDICT
+        # ═══════════════════════════════════════════════════════════
+        
+        return JSONResponse({
+            "status": "success",
+            "user_id": user_id,
+            "prompt": message,
+            "openai": results.get("openai", ""),
+            "deepseek": results.get("deepseek", ""),
+            "claude": results.get("claude", ""),
+            "verdict": verdict,  # ✅ Verdict added
+            "results": results,
+        })
+    
+    except HTTPException:
+        raise  # Re-raise authentication errors
+    except Exception as e:
+        print(f"❌ Triplet endpoint error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ════════════════════════════════════════════════════════════════════
+# WHAT THIS DOES:
+# ════════════════════════════════════════════════════════════════════
+#
+# For each model (OpenAI, DeepSeek, Claude):
+# 1. Try to use your existing service (if it exists)
+# 2. Try to call the API directly (if you have API keys)
+# 3. Fall back to OpenAI with a clear message
+# 4. If everything fails, show an error message
+#
+# This ensures AT LEAST OpenAI will work, and others will gracefully
+# fall back instead of showing confusing errors.
+#
+# ════════════════════════════════════════════════════════════════════

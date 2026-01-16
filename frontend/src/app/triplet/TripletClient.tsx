@@ -102,7 +102,7 @@ export default function TripletClient() {
   );
 
   return (
-    <div className="flex flex-col h-full items-center w-full">
+    <div className="flex flex-col h-full justify-between items-center w-full px-6">
       {/* RESULTS */}
       <div className="w-full max-w-[1400px] grid grid-cols-1 md:grid-cols-3 gap-8 mt-6 mb-10">
         {renderCard('/chatgpt_logo.png', results?.gpt)}
@@ -135,23 +135,29 @@ export default function TripletClient() {
         </div>
       </div>
 
-      {/* SPACER */}
-      <div className="flex-1"></div>
-
-      {/* INPUT AT BOTTOM - CENTERED IN 1400px CONTAINER */}
-      <div className="w-full max-w-[1400px] mb-6 flex justify-center">
-        <MessageInput
-          ref={textareaRef}
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          onSubmit={(msg) => handleSubmit(msg)}
-          onTranscription={() => {}}
-          placeholder="Ask Triplet AI…"
-          loading={loading}
-          disabled={false}
-          isAgentRunning={false}
-          isLoggedIn
-        />
+      {/* INPUT - CENTERED WITH TRANSFORM */}
+      <div className="w-full max-w-[1400px] mx-auto mb-6">
+        <div 
+          style={{
+            position: 'relative',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            width: 'fit-content',
+          }}
+        >
+          <MessageInput
+            ref={textareaRef}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onSubmit={(msg) => handleSubmit(msg)}
+            onTranscription={() => {}}
+            placeholder="Ask Triplet AI…"
+            loading={loading}
+            disabled={false}
+            isAgentRunning={false}
+            isLoggedIn
+          />
+        </div>
       </div>
     </div>
   );

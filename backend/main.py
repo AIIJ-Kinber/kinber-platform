@@ -76,9 +76,10 @@ from .routes.agent_actions import router as actions_router
 from .routes.search import router as tools_router
 from .routes.triplet import router as triplet_router
 
-# Order does not matter functionally, but this is clean
+# ✅ FIXED: Changed /api/thread to /api/threads (plural) to match REST conventions
+# This matches the frontend expectations and standard API patterns
 app.include_router(triplet_router, prefix="/api", tags=["Triplet"])
-app.include_router(thread_router, prefix="/api/thread", tags=["Thread"])
+app.include_router(thread_router, prefix="/api/threads", tags=["Thread"])  # ← Changed from /thread to /threads
 app.include_router(agent_router, prefix="/api/agent", tags=["Agent"])
 app.include_router(actions_router, prefix="/api/actions", tags=["Actions"])
 app.include_router(tools_router, prefix="/api/tools", tags=["Tools"])
