@@ -1,17 +1,33 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import { createClient } from '@/lib/supabase/client';
 import MessageInput from '@/_components/thread/chat-input/message-input';
 
 const TRIPLET_API_URL = 'http://127.0.0.1:8000/api/triplet';
 
 export default function TripletClient() {
+  const router = useRouter();
+  const supabase = createClient();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const [loading, setLoading] = useState(false);
   const [prompt, setPrompt] = useState('');
   const [results, setResults] = useState<any>(null);
+
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  const checkAuth = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      console.log('No session found, redirecting to login');
+      router.push('/login');
+    }
+  };
 
   const handleSubmit = async (text: string) => {
     if (!text.trim() || loading) return;
@@ -21,16 +37,47 @@ export default function TripletClient() {
     setResults(null);
 
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!session || !user) {
+        console.error('No session found');
+        router.push('/login');
+        return;
+      }
+
       const res = await fetch(TRIPLET_API_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+          'X-User-ID': user.id,
+        },
         body: JSON.stringify({ prompt: text }),
       });
 
+      if (res.status === 401) {
+        console.error('Authentication failed');
+        router.push('/login');
+        return;
+      }
+
+      if (!res.ok) {
+        throw new Error(`HTTP error! status: ${res.status}`);
+      }
+
       const data = await res.json();
-      setResults(data);
+
+      setResults({
+        gpt: data.openai || data.gpt || 'No response',
+        claude: data.claude || 'No response',
+        deepseek: data.deepseek || 'No response',
+        verdict: data.verdict || 'Analyzing responses...',
+      });
+
     } catch (err) {
-      console.error('Triplet error:', err);
+      console.error('❌ Triplet error:', err);
+      alert('Failed to get responses. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -55,7 +102,7 @@ export default function TripletClient() {
   );
 
   return (
-    <div className="flex flex-col h-full justify-between items-center w-full px-6">
+    <div className="flex flex-col h-full items-center w-full">
       {/* RESULTS */}
       <div className="w-full max-w-[1400px] grid grid-cols-1 md:grid-cols-3 gap-8 mt-6 mb-10">
         {renderCard('/chatgpt_logo.png', results?.gpt)}
@@ -88,8 +135,11 @@ export default function TripletClient() {
         </div>
       </div>
 
-      {/* INPUT */}
-      <div className="w-full max-w-[1400px] mx-auto mb-6">
+      {/* SPACER */}
+      <div className="flex-1"></div>
+
+      {/* INPUT AT BOTTOM - CENTERED IN 1400px CONTAINER */}
+      <div className="w-full max-w-[1400px] mb-6 flex justify-center">
         <MessageInput
           ref={textareaRef}
           value={prompt}

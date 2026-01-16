@@ -13,8 +13,9 @@ export default function TripletLayout({
       {/* 
         Triplet-specific width override
         Sidebar still comes from DashboardLayout
+        REMOVED px-6 to prevent padding interference
       */}
-      <div className="w-full max-w-[1400px] mx-auto px-6 py-6">
+      <div className="w-full max-w-[1400px] mx-auto py-6">
         {children}
       </div>
     </DashboardLayout>

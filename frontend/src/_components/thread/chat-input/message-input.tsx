@@ -337,38 +337,29 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
       return () => subscription.unsubscribe();
     }, [supabase]);
 
-    // Initial token load on mount
+// Initial token load on mount - DISABLED to prevent stale "Connected" state
     useEffect(() => {
       const loadToken = async () => {
-        // First check if user explicitly disconnected (localStorage check)
-        const wasDisconnected = localStorage.getItem("google_drive_disconnected");
-        if (wasDisconnected === "true") {
-          console.log('🚫 Drive was manually disconnected, staying disconnected');
-          setAccessToken(null);
-          return;
-        }
-
-        // Otherwise load from Supabase session
-        const { data } = await supabase.auth.getSession();
-        const token = (data.session as any)?.provider_token || null;
-        if (token) {
-          console.log('✅ Loaded Drive token from existing session');
-        }
-        setAccessToken(token);
+        // ✅ FIXED: Always start disconnected on page load
+        // Users must actively connect Google Drive each session
+        console.log('🔄 Google Drive starts disconnected (prevents stale state)');
+        setAccessToken(null);
+        
+        // Clear any stale flags
+        localStorage.removeItem("google_drive_disconnected");
+        localStorage.removeItem("google_access_token");
       };
       loadToken();
     }, [supabase]);
 
-        /* ---------------------------------------------------------
+    /* ---------------------------------------------------------
        Disconnect Google Drive (clear token + notify UI)
     --------------------------------------------------------- */
     const disconnectGoogleDrive = React.useCallback(async () => {
       console.log("🔌 Disconnecting Google Drive…");
 
-      // Set disconnected flag in localStorage
-      localStorage.setItem("google_drive_disconnected", "true");
-      
-      // Remove stored token from localStorage
+      // Clear all Drive-related storage
+      localStorage.removeItem("google_drive_disconnected");
       localStorage.removeItem("google_access_token");
 
       // Update local UI immediately

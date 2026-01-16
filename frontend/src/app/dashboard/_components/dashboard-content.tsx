@@ -1,3 +1,5 @@
+// src\app\dashboard\_components\dashboard-content.tsx
+
 'use client';
 
 import React, {
@@ -264,14 +266,39 @@ const backendBase = useMemo(() => {
       const trimmed = message.trim();
       if (!trimmed) return;
 
-      // 🔒 Absolute guard against duplicate execution
+      // 🔒 Guard against duplicate execution
       if (isSendingRef.current || isGenerating) return;
-
       isSendingRef.current = true;
       setIsSubmitting(true);
       setIsGenerating(true);
 
-      // 🔥 CRITICAL: Use attachments parameter if provided, otherwise use state
+      // ✅ CHECK SESSION FIRST - CRITICAL!
+      console.log("🔐 Checking authentication...");
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        console.error("❌ Session error:", sessionError);
+        alert("Authentication error. Please refresh and try again.");
+        isSendingRef.current = false;
+        setIsSubmitting(false);
+        setIsGenerating(false);
+        return;
+      }
+
+      if (!session) {
+        console.error("❌ No session found");
+        alert("You must be logged in. Redirecting to login...");
+        window.location.href = "/login";
+        return;
+      }
+
+      console.log("✅ Session verified:", {
+        userId: session.user?.id,
+        hasToken: !!session.access_token,
+        tokenPreview: session.access_token?.substring(0, 20) + "..."
+      });
+
+      // ... rest of the combined attachments logic ...
       const combinedAttachments =
         attachments.length > 0 ? attachments : attachedFiles;
 
@@ -309,36 +336,64 @@ const backendBase = useMemo(() => {
         // Ensure thread exists
         let activeThreadId: string | null = initiatedThreadId || threadId || null;
 
-        if (!activeThreadId) {
-          const { data } = await supabase.auth.getUser();
-          const user = data?.user;
+      if (!activeThreadId) {
+        // ✅ Get user
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user;
 
-          const res = await apiFetch('/api/thread', {
-            method: 'POST',
-            body: JSON.stringify({
-              title: 'New Conversation',
-              user_id: user?.id ?? null,
-            }),
-          });
-
-          const json = await res.json();
-          console.log("THREAD CREATE RESPONSE:", json);
-          const newThreadId =
-            typeof json?.thread_id === 'string' ? json.thread_id : null;
-
-          if (!newThreadId) {
-            throw new Error('Invalid thread_id returned from backend');
-          }
-
-          activeThreadId = newThreadId;
-          setInitiatedThreadId(newThreadId);
-
-          window.history.replaceState(
-            {},
-            '',
-            `/dashboard?thread_id=${newThreadId}`
-          );
+        if (!user?.id) {
+          console.error("❌ No user found - redirecting to login");
+          window.location.href = "/login";
+          isSendingRef.current = false;
+          setIsSubmitting(false);
+          setIsGenerating(false);
+          return;
         }
+
+        console.log("🧵 Creating new thread for user:", user.id);
+
+        // ✅ Direct fetch with explicit headers
+        const res = await fetch(`${backendBase}/api/threads/`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-ID': user.id,
+          },
+          body: JSON.stringify({
+            title: 'New Conversation',
+            user_id: user.id,
+          }),
+        });
+
+        console.log("📥 Create thread response:", res.status, res.statusText);
+
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error("❌ Thread creation failed:", res.status, errorText);
+          throw new Error(`Failed to create thread: ${res.status} - ${errorText}`);
+        }
+
+        const json = await res.json();
+        console.log("✅ Thread created successfully:", json);
+
+        const newThreadId = typeof json?.thread_id === 'string' ? json.thread_id : null;
+        if (!newThreadId) {
+          console.error("❌ Invalid response from backend:", json);
+          throw new Error('Invalid thread_id returned from backend');
+        }
+
+        activeThreadId = newThreadId;
+        setInitiatedThreadId(newThreadId);
+
+        window.history.replaceState(
+          {},
+          '',
+          `/dashboard?thread_id=${newThreadId}`
+        );
+
+        console.log("✅ Thread ID set:", newThreadId);
+      }
 
         // 🔥 Build payload with attachments
         const payload = {
@@ -367,14 +422,30 @@ const backendBase = useMemo(() => {
         console.log('🚀 Sending payload to backend:', payload);
         console.log('📦 Attachments in payload:', JSON.stringify(payload.attachments, null, 2));
 
-        // Call backend
-        const agentRes = await apiFetch(
-          `/api/thread/${activeThreadId}/agent/start`,
+        // ✅ Get user for header
+        const { data } = await supabase.auth.getUser();
+        const user = data?.user;
+
+        if (!user?.id) {
+          console.error("❌ No user ID!");
+          throw new Error("Authentication required");
+        }
+
+        // ✅ DIRECT FETCH - Bypass apiFetch
+        const agentRes = await fetch(
+          `${backendBase}/api/threads/${activeThreadId}/agent/start`,
           {
             method: 'POST',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-User-ID': user.id, // ✅ Direct header
+            },
             body: JSON.stringify(payload),
           }
         );
+
+        console.log("📥 Agent response:", agentRes.status);
 
         let aiReply = 'No response.';
         if (agentRes.ok) {
@@ -472,7 +543,21 @@ useEffect(() => {
       const tid = threadId || initiatedThreadId;
       if (!tid) return;
 
-      const res = await fetch(`${backendBase}/api/thread/${tid}`);
+      const { data } = await supabase.auth.getUser();
+      const user = data?.user;
+
+      if (!user?.id) {
+        console.error("❌ No user ID!");
+        return;
+      }
+
+      const res = await fetch(`${backendBase}/api/threads/${tid}`, {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': user.id,
+        },
+      });
       if (!res.ok) return;
 
       const json = await res.json();
