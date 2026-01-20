@@ -1977,11 +1977,12 @@ async def triplet_comparison(request: Request):
                 except Exception as e:
                     print(f"❌ Claude service error: {str(e)[:200]}")
             
-            # STRATEGY 2: Try direct API call with Anthropic SDK
+            # STRATEGY 2: Try direct API call with Anthropic SDK (with retry logic)
             if not claude_success:
                 try:
                     print("🟠 Trying direct Claude API call...")
                     import os
+                    import asyncio
                     from anthropic import AsyncAnthropic
                     
                     claude_key = os.getenv("ANTHROPIC_API_KEY")
@@ -1989,18 +1990,50 @@ async def triplet_comparison(request: Request):
                     if claude_key:
                         client = AsyncAnthropic(api_key=claude_key)
                         
-                        response = await client.messages.create(
-                            model="claude-sonnet-4-20250514",
-                            max_tokens=1024,
-                            messages=[{"role": "user", "content": message}]
-                        )
+                        # ✅ RETRY LOGIC for 529 overload errors
+                        max_retries = 3
+                        retry_delay = 2
                         
-                        results["claude"] = response.content[0].text
-                        claude_success = True
-                        print(f"✅ Claude API completed: {len(results['claude'])} chars")
+                        for attempt in range(max_retries):
+                            try:
+                                if attempt > 0:
+                                    print(f"   Retry attempt {attempt + 1}/{max_retries}...")
+                                
+                                response = await client.messages.create(
+                                    model="claude-sonnet-4-20250514",
+                                    max_tokens=1024,
+                                    messages=[{"role": "user", "content": message}]
+                                )
+                                
+                                results["claude"] = response.content[0].text
+                                claude_success = True
+                                print(f"✅ Claude API completed: {len(results['claude'])} chars")
+                                break
+                                
+                            except Exception as retry_error:
+                                error_str = str(retry_error)
+                                
+                                # Check for 529 overload error
+                                if ("529" in error_str or "overloaded" in error_str.lower()) and attempt < max_retries - 1:
+                                    wait_time = retry_delay * (2 ** attempt)
+                                    print(f"⚠️ Claude overloaded (529), waiting {wait_time}s before retry...")
+                                    await asyncio.sleep(wait_time)
+                                    continue
+                                else:
+                                    # Last attempt or non-retryable error
+                                    raise retry_error
+                    else:
+                        print("⚠️ No ANTHROPIC_API_KEY found in environment")
                     
                 except Exception as e:
-                    print(f"❌ Claude direct API error: {str(e)[:200]}")
+                    error_msg = str(e)
+                    print(f"❌ Claude API error: {error_msg[:200]}")
+                    
+                    # User-friendly error messages
+                    if "529" in error_msg or "overloaded" in error_msg.lower():
+                        results["claude"] = "⏳ Claude API is experiencing high traffic. Please try again in a moment."
+                    elif "401" in error_msg or "authentication" in error_msg.lower():
+                        results["claude"] = "🔑 Claude API authentication failed. Please check your ANTHROPIC_API_KEY."
             
             # STRATEGY 3: Fallback to OpenAI
             if not claude_success:
@@ -2018,13 +2051,13 @@ async def triplet_comparison(request: Request):
                         long_term_memory="",
                     )
                     
-                    results["claude"] = "[Using OpenAI as fallback - Claude not configured]\n\n" + extract_text(fallback_result)
+                    results["claude"] = "[Using OpenAI as fallback - Claude temporarily unavailable]\n\n" + extract_text(fallback_result)
                     print(f"✅ Claude (fallback) completed: {len(results['claude'])} chars")
                     
                 except Exception as e:
                     error_msg = str(e)
                     print(f"❌ Claude fallback failed: {error_msg}")
-                    results["claude"] = f"Claude Error: {error_msg[:300]}"
+                    results["claude"] = f"❌ All Claude strategies failed: {error_msg[:250]}"
         
         # ═══════════════════════════════════════════════════════════
         # LOG COMPLETION STATUS
