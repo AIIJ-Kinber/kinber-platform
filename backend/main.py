@@ -28,13 +28,13 @@ app = FastAPI(
 )
 
 # ------------------------------------------------------------
-# CORS Configuration (✅ IMPROVED FOR TEAM ACCESS)
+# CORS Configuration (✅ FIXED FOR CREDENTIALS)
 # ------------------------------------------------------------
-# Get custom origins from environment variable (for production)
+# Get custom origins from environment variable
 CUSTOM_ORIGINS = os.getenv("ALLOWED_ORIGINS", "").split(",")
 CUSTOM_ORIGINS = [origin.strip() for origin in CUSTOM_ORIGINS if origin.strip()]
 
-# Default allowed origins (development + production)
+# Default allowed origins
 ALLOWED_ORIGINS = [
     # Local development
     "http://localhost:3000",
@@ -51,24 +51,31 @@ ALLOWED_ORIGINS = [
     *CUSTOM_ORIGINS,
 ]
 
-# ✅ IMPROVED: Check if running in development mode
+# ✅ Check if running in development mode
 IS_DEV = os.getenv("ENVIRONMENT", "development") == "development"
 
-# ✅ In development, allow all origins for team testing
+# ✅ CRITICAL: When using credentials, CANNOT use wildcard "*"
+# Must specify exact origins
 if IS_DEV:
-    print("🔓 Running in DEVELOPMENT mode - CORS allows all origins")
-    ALLOWED_ORIGINS = ["*"]
+    print("🔓 Running in DEVELOPMENT mode")
+    # In dev, still use specific localhost origins (not "*")
+    ALLOWED_ORIGINS = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
 else:
     print(f"🔒 Running in PRODUCTION mode - CORS limited to: {ALLOWED_ORIGINS}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,  # ✅ Specific origins, NOT "*"
+    allow_credentials=True,  # ✅ This requires specific origins
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
-    max_age=3600,  # Cache preflight requests for 1 hour
+    max_age=3600,
 )
 
 # ------------------------------------------------------------
