@@ -12,7 +12,7 @@ export default function AgentForm({ onClose }: { onClose: () => void }) {
   const [form, setForm] = useState({
     name: "",
     description: "",
-    model_name: "gemini-2.0-flash-exp",
+    model_name: "gpt-4o-mini",
     persona: "You are Kinber, a helpful AI assistant.",
   });
 

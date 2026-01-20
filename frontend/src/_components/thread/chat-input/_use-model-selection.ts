@@ -227,8 +227,8 @@ function useAvailableModels() {
     data: {
       models: [
         {
-          id: "gemini-2.0-flash-exp",
-          name: "Gemini 2.0 Flash",
+          id: "gpt-4o-mini",
+          name: "GPT-4o Mini",
           provider: "google",
         },
       ],

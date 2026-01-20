@@ -49,7 +49,7 @@ else:
         genai_model_available = False
 
 
-def _get_model(model_name: str = "gemini-2.0-flash-exp"):
+def _get_model(model_name: str = "gpt-4o-mini"):
     """
     Internal helper to get a Gemini model instance.
 
@@ -601,7 +601,7 @@ def format_for_agent_search_block(search_data: dict) -> str:
 async def analyze_image_with_gemini(
     base64_str: str,
     mime_type: str = "image/png",
-    model_name: str = "gemini-2.0-flash-exp",
+    model_name: str = "gpt-4o-mini",
 ) -> str:
     """Analyze an image (base64) using Gemini Vision."""
     if not genai_model_available:
@@ -842,7 +842,7 @@ def strict_extract_json(text: str) -> Optional[str]:
 async def run_gemini_agent(
     message: str,
     agent: str = "default",
-    model_name: str = "gemini-2.0-flash-exp",
+    model_name: str = "gpt-4o-mini",
     mid_summary: str | None = None,
     long_term_memory: str | None = None,
     conversation: str | None = None,
@@ -1114,7 +1114,7 @@ async def generate_short_summary(text: str) -> str:
     This is NOT shown to the user and is stored inside metadata.
     """
     try:
-        model = _get_model("gemini-2.0-flash-exp")
+        model = _get_model("gpt-4o-mini")
         if model is None:
             return ""
 
@@ -1169,7 +1169,7 @@ async def test_connection() -> bool:
         now_utc = datetime.now(timezone.utc)
         test_time = now_utc.strftime("%H:%M:%S UTC on %B %d, %Y")
 
-        model = _get_model("gemini-2.0-flash-exp")
+        model = _get_model("gpt-4o-mini")
         if model is None:
             print("❌ No Gemini model instance available for test.")
             return False

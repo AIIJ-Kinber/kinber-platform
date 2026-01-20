@@ -7,7 +7,7 @@ from typing import Any, Dict, List
 
 # OpenAI core agent functions
 from backend.services.openai_agent import run_openai_agent
-from backend.services.gemini import analyze_image_with_gemini
+from backend.services.openai_agent import analyze_image_with_openai
 
 
 # Tool services

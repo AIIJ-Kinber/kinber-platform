@@ -23,6 +23,17 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeRaw from 'rehype-raw';
 
+// Extend window interface for document context
+declare global {
+  interface Window {
+    __documentContext?: Array<{
+      threadId: string;
+      timestamp: string;
+      content: string;
+    }>;
+  }
+}
+
 /* ---------------------------------------------------------
    MARKDOWN RENDERER (Claude-style Typography)
 --------------------------------------------------------- */
@@ -199,6 +210,7 @@ type UIMessage = {
   isUser: boolean;
   noBubble?: boolean;
   attachments?: UIAttachment[];
+  message_id?: string;
 };
 
 /* ---------------------------------------------------------
@@ -217,6 +229,11 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
   const [showScrollButton, setShowScrollButton] = useState(false);
   const hasSubmittedWelcomeRef = useRef(false);
 
+  // ✅ ADD IT HERE
+  const [selectedImage, setSelectedImage] = useState<{
+    file: File;
+    preview: string;
+  } | null>(null);
 
   /* ---------- Refs ---------- */
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
@@ -254,95 +271,79 @@ const backendBase = useMemo(() => {
     }, 100);
   }, []);
 
-  /* ---------------------------------------------------------
-     MAIN SUBMIT (MERGED - AI responses from A + attachment handling from B)
-  --------------------------------------------------------- */
-  const handleSubmit = useCallback(
-    async (
-      message: string,
-      attachments: UIAttachment[] = [],
-      skipEcho = false
-    ) => {
-      const trimmed = message.trim();
-      if (!trimmed) return;
+/* ---------------------------------------------------------
+   ENHANCED SUBMIT - WITH AUTOMATIC IMAGE ANALYSIS
+--------------------------------------------------------- */
+const handleSubmit = useCallback(
+  async (
+    message: string,
+    attachments: UIAttachment[] = [],
+    skipEcho = false
+  ) => {
+    const trimmed = message.trim();
+    if (!trimmed) return;
 
-      // 🔒 Guard against duplicate execution
-      if (isSendingRef.current || isGenerating) return;
-      isSendingRef.current = true;
-      setIsSubmitting(true);
-      setIsGenerating(true);
+    // 🔒 Guard against duplicate execution
+    if (isSendingRef.current || isGenerating) return;
+    isSendingRef.current = true;
+    setIsSubmitting(true);
+    setIsGenerating(true);
 
-      // ✅ CHECK SESSION FIRST - CRITICAL!
-      console.log("🔐 Checking authentication...");
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    // ✅ CHECK SESSION FIRST
+    console.log("🔐 Checking authentication...");
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        console.error("❌ Session error:", sessionError);
-        alert("Authentication error. Please refresh and try again.");
-        isSendingRef.current = false;
-        setIsSubmitting(false);
-        setIsGenerating(false);
-        return;
+    if (sessionError) {
+      console.error("❌ Session error:", sessionError);
+      alert("Authentication error. Please refresh and try again.");
+      isSendingRef.current = false;
+      setIsSubmitting(false);
+      setIsGenerating(false);
+      return;
+    }
+
+    if (!session) {
+      console.error("❌ No session found");
+      alert("You must be logged in. Redirecting to login...");
+      window.location.href = "/login";
+      return;
+    }
+
+    console.log("✅ Session verified:", {
+      userId: session.user?.id,
+      hasToken: !!session.access_token,
+    });
+
+    const combinedAttachments = attachments.length > 0 ? attachments : attachedFiles;
+
+    console.log('📎 Combined attachments:', combinedAttachments);
+
+    try {
+      // Echo user message
+      if (!skipEcho) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'user',
+            content: trimmed,
+            isUser: true,
+            attachments: combinedAttachments,
+          },
+        ]);
       }
 
-      if (!session) {
-        console.error("❌ No session found");
-        alert("You must be logged in. Redirecting to login...");
-        window.location.href = "/login";
-        return;
-      }
+      setInputValue('');
+      scrollToBottom();
 
-      console.log("✅ Session verified:", {
-        userId: session.user?.id,
-        hasToken: !!session.access_token,
-        tokenPreview: session.access_token?.substring(0, 20) + "..."
-      });
-
-      // ... rest of the combined attachments logic ...
-      const combinedAttachments =
-        attachments.length > 0 ? attachments : attachedFiles;
-
-      console.log('📎 SUBMIT - Combined attachments:', combinedAttachments);
-      console.log('📎 SUBMIT - Detailed attachment structure:', 
-        combinedAttachments.map((f, idx) => ({
-          index: idx,
-          name: f.name,
-          url: f.url,
-          type: f.type,
-          size: f.size,
-          hasBase64: !!f.base64,
-          base64Length: f.base64?.length || 0,
-          allKeys: Object.keys(f)
-        }))
-      );
-
-      try {
-        // Echo user message
-        if (!skipEcho) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              role: 'user',
-              content: trimmed,
-              isUser: true,
-              attachments: combinedAttachments,
-            },
-          ]);
-        }
-
-        setInputValue('');
-        scrollToBottom();
-
-        // Ensure thread exists
-        let activeThreadId: string | null = initiatedThreadId || threadId || null;
+      // Ensure thread exists
+      let activeThreadId: string | null = initiatedThreadId || threadId || null;
 
       if (!activeThreadId) {
-        // ✅ Get user
         const { data } = await supabase.auth.getUser();
         const user = data?.user;
 
         if (!user?.id) {
-          console.error("❌ No user found - redirecting to login");
+          console.error("❌ No user found");
           window.location.href = "/login";
           isSendingRef.current = false;
           setIsSubmitting(false);
@@ -350,9 +351,8 @@ const backendBase = useMemo(() => {
           return;
         }
 
-        console.log("🧵 Creating new thread for user:", user.id);
+        console.log("🧵 Creating new thread...");
 
-        // ✅ Direct fetch with explicit headers
         const res = await fetch(`${backendBase}/api/threads/`, {
           method: 'POST',
           credentials: 'include',
@@ -366,21 +366,15 @@ const backendBase = useMemo(() => {
           }),
         });
 
-        console.log("📥 Create thread response:", res.status, res.statusText);
-
         if (!res.ok) {
-          const errorText = await res.text();
-          console.error("❌ Thread creation failed:", res.status, errorText);
-          throw new Error(`Failed to create thread: ${res.status} - ${errorText}`);
+          throw new Error(`Failed to create thread: ${res.status}`);
         }
 
         const json = await res.json();
-        console.log("✅ Thread created successfully:", json);
+        const newThreadId = json?.thread_id;
 
-        const newThreadId = typeof json?.thread_id === 'string' ? json.thread_id : null;
         if (!newThreadId) {
-          console.error("❌ Invalid response from backend:", json);
-          throw new Error('Invalid thread_id returned from backend');
+          throw new Error('Invalid thread_id returned');
         }
 
         activeThreadId = newThreadId;
@@ -391,111 +385,288 @@ const backendBase = useMemo(() => {
           '',
           `/dashboard?thread_id=${newThreadId}`
         );
-
-        console.log("✅ Thread ID set:", newThreadId);
       }
 
-        // 🔥 Build payload with attachments
-        const payload = {
-          message: trimmed,
-          model_name: 'gemini-2.0-flash-exp',
-          agent: 'default',
-          attachments: combinedAttachments.map((f) => {
-            // Extract base64 data (could be in 'base64' or 'data' field)
-            let base64Data = f.base64 || (f as any).data || null;
-            
-            // If base64 exists but doesn't have data URI prefix, add it
-            if (base64Data && !base64Data.startsWith('data:')) {
-              base64Data = `data:${f.type || 'application/octet-stream'};base64,${base64Data}`;
-            }
-            
-            return {
-              name: f.name,
-              url: f.url,
-              type: f.type,
-              size: f.size,
-              base64: base64Data,
-            };
-          }),
-        };
+      // ✅ SMART AUTO-DETECT AND ANALYZE IMAGES/PDFs
+      let imageAnalysis = '';
+      const imageAttachments = combinedAttachments.filter(f => 
+        f.type?.startsWith('image/') || f.type === 'application/pdf'
+      );
 
-        console.log('🚀 Sending payload to backend:', payload);
-        console.log('📦 Attachments in payload:', JSON.stringify(payload.attachments, null, 2));
+      // ✅ Only analyze on FIRST upload (fresh attachments)
+      // Do NOT re-analyze on follow-up questions
+      const hasFreshAttachments = attachedFiles.length > 0;
+      const shouldAnalyze = imageAttachments.length > 0 && hasFreshAttachments;
 
-        // ✅ Get user for header
-        const { data } = await supabase.auth.getUser();
-        const user = data?.user;
-
-        if (!user?.id) {
-          console.error("❌ No user ID!");
-          throw new Error("Authentication required");
-        }
-
-        // ✅ DIRECT FETCH - Bypass apiFetch
-        const agentRes = await fetch(
-          `${backendBase}/api/threads/${activeThreadId}/agent/start`,
-          {
-            method: 'POST',
-            credentials: 'include',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-User-ID': user.id, // ✅ Direct header
-            },
-            body: JSON.stringify(payload),
-          }
-        );
-
-        console.log("📥 Agent response:", agentRes.status);
-
-        let aiReply = 'No response.';
-        if (agentRes.ok) {
-          const data = await agentRes.json();
-          aiReply =
-            data?.assistant_reply ||
-            data?.data?.assistant_reply ||
-            data?.message ||
-            aiReply;
-        } else {
-          console.error('❌ Backend error:', await agentRes.text());
-        }
-
-        // Add AI response
+      if (shouldAnalyze) {
+        console.log(`📷 First-time upload detected, analyzing ${imageAttachments.length} file(s)...`);
+        
+        // Show analyzing message
+        const analyzingMsgId = crypto.randomUUID();
         setMessages((prev) => [
           ...prev,
           {
+            message_id: analyzingMsgId,
             role: 'assistant',
-            content: aiReply,
+            content: '📷 Analyzing uploaded file(s)...',
             isUser: false,
             noBubble: true,
           },
         ]);
 
-        // ✅ CLEAR ATTACHMENTS ONLY AFTER SUCCESSFUL SEND
-        setAttachedFiles([]);
-        
-        // ✅ Dispatch clear event for MessageInput component
-        window.dispatchEvent(new CustomEvent('attachments:cleared'));
-        
-        scrollToBottom();
+        try {
+          const { data } = await supabase.auth.getUser();
+          const user = data?.user;
+
+          // Analyze each file
+          const analyses = await Promise.all(
+            imageAttachments.map(async (img) => {
+              try {
+                const response = await fetch(
+                  `${backendBase}/api/threads/${activeThreadId}/analyze-attachment`,
+                  {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'X-User-ID': user?.id || '',
+                    },
+                    body: JSON.stringify({ attachment: img }),
+                  }
+                );
+
+                if (response.ok) {
+                  const result = await response.json();
+                  return result.is_image || result.is_pdf ? {
+                    filename: result.filename,
+                    analysis: result.analysis,
+                    pages: result.pages
+                  } : null;
+                }
+                return null;
+              } catch (err) {
+                console.error('File analysis error:', err);
+                return null;
+              }
+            })
+          );
+
+// Combine analyses
+const validAnalyses = analyses.filter((item) => item !== null);
+
+if (validAnalyses.length > 0) {
+  imageAnalysis = validAnalyses
+    .map((item) => {
+      const header = item.pages 
+        ? `**${item.filename}** (${item.pages} pages)` 
+        : `**${item.filename}**`;
+      return `${header}\n\n${item.analysis}`;
+    })
+    .join('\n\n---\n\n');
+
+  // ✅ Update the analyzing message with extraction
+  setMessages((prev) => {
+    const newMessages = [...prev];
+    const msgIndex = newMessages.findIndex(m => m.message_id === analyzingMsgId);
+    if (msgIndex !== -1) {
+      newMessages[msgIndex] = {
+        message_id: analyzingMsgId,
+        role: 'assistant',
+        content: `📄 **Extracted Document Content:**\n\n${imageAnalysis}\n\n---\n\n*This content is now available for questions.*`,
+        isUser: false,
+        noBubble: true,
+      };
+    }
+    return newMessages;
+  });
+
+  scrollToBottom();
+
+  // ✅ Save extraction to backend thread
+  try {
+    console.log('\n🔍 ═══════════════════════════════════════');
+    console.log('🔍 ATTEMPTING TO SAVE CONTEXT TO DATABASE');
+    console.log('🔍 ═══════════════════════════════════════');
+    
+    const { data } = await supabase.auth.getUser();
+    const user = data?.user;
+
+    console.log('🔍 User data:', { hasUser: !!user, userId: user?.id });
+    console.log('🔍 Thread ID:', activeThreadId);
+    console.log('🔍 Context length:', imageAnalysis?.length || 0);
+    console.log('🔍 Context preview:', imageAnalysis?.substring(0, 100));
+
+    if (user?.id && activeThreadId) {
+      console.log('✅ Prerequisites met, calling /add-context endpoint...');
+      
+      const saveResponse = await fetch(`${backendBase}/api/threads/${activeThreadId}/add-context`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': user.id,
+        },
+        body: JSON.stringify({
+          context: imageAnalysis,
+          type: 'document_extraction',
+        }),
+      });
+
+      console.log('💾 Save response status:', saveResponse.status);
+      console.log('💾 Save response ok:', saveResponse.ok);
+      
+      if (saveResponse.ok) {
+        const result = await saveResponse.json();
+        console.log('✅ ═══════════════════════════════════════');
+        console.log('✅ CONTEXT SAVED SUCCESSFULLY!');
+        console.log('✅ Result:', result);
+        console.log('✅ ═══════════════════════════════════════\n');
+      } else {
+        const errorText = await saveResponse.text();
+        console.error('❌ ═══════════════════════════════════════');
+        console.error('❌ SAVE FAILED!');
+        console.error('❌ Status:', saveResponse.status);
+        console.error('❌ Error:', errorText);
+        console.error('❌ ═══════════════════════════════════════\n');
+      }
+    } else {
+      console.error('❌ ═══════════════════════════════════════');
+      console.error('❌ PREREQUISITES NOT MET!');
+      console.error('❌ Missing:', {
+        hasUserId: !!user?.id,
+        hasThreadId: !!activeThreadId,
+        userId: user?.id || 'NONE',
+        threadId: activeThreadId || 'NONE'
+      });
+      console.error('❌ ═══════════════════════════════════════\n');
+    }
+  } catch (err) {
+    console.error('❌ ═══════════════════════════════════════');
+    console.error('❌ EXCEPTION IN SAVE CONTEXT:');
+    console.error('❌ Error:', err);
+    console.error('❌ ═══════════════════════════════════════\n');
+  }
+
+  // ✅ CRITICAL: Clear attachments after successful extraction
+  setAttachedFiles([]);
+  window.dispatchEvent(new CustomEvent('attachments:cleared'));
+  console.log('✅ Attachments cleared to prevent re-analysis');
+      }
       } catch (err) {
-        console.error('❌ Submit error:', err);
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: 'assistant',
-            content: 'Sorry, I could not process that request.',
-            isUser: false,
-            noBubble: true,
-          },
-        ]);
-      } finally {
-        setIsSubmitting(false);
-        setIsGenerating(false);
-        isSendingRef.current = false;
+        console.error('❌ Error analyzing attachments:', err);
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          const msgIndex = newMessages.findIndex(m => m.message_id === analyzingMsgId);
+          if (msgIndex !== -1) {
+            newMessages[msgIndex] = {
+              message_id: analyzingMsgId,
+              role: 'assistant',
+              content: '❌ Error analyzing files. Proceeding without extraction.',
+              isUser: false,
+              noBubble: true,
+            };
+          }
+          return newMessages;
+        });
       }
-    },
-    [supabase, threadId, initiatedThreadId, attachedFiles, scrollToBottom]
-  );
+}
+
+      // ✅ Build payload (backend will load context from database)
+      const payload = {
+        message: trimmed, // Send clean message - backend adds context
+        model_name: 'gpt-4o-mini',
+        agent: 'default',
+        attachments: combinedAttachments.map((f) => {
+          let base64Data = f.base64 || (f as any).data || null;
+
+          if (base64Data && !base64Data.startsWith('data:')) {
+            base64Data = `data:${f.type || 'application/octet-stream'};base64,${base64Data}`;
+          }
+
+          return {
+            name: f.name,
+            url: f.url,
+            type: f.type,
+            size: f.size,
+            base64: base64Data,
+          };
+        }),
+      };
+
+      console.log('🚀 Sending payload to backend');
+
+      const { data } = await supabase.auth.getUser();
+      const user = data?.user;
+
+      if (!user?.id) {
+        throw new Error("Authentication required");
+      }
+
+      // Call agent
+      const agentRes = await fetch(
+        `${backendBase}/api/threads/${activeThreadId}/agent/start`,
+        {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-User-ID': user.id,
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      console.log("📥 Agent response:", agentRes.status);
+
+      let aiReply = 'No response.';
+      if (agentRes.ok) {
+        const data = await agentRes.json();
+        aiReply =
+          data?.assistant_reply ||
+          data?.data?.assistant_reply ||
+          data?.message ||
+          aiReply;
+      } else {
+        console.error('❌ Backend error:', await agentRes.text());
+      }
+
+      // Add AI response
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: aiReply,
+          isUser: false,
+          noBubble: true,
+        },
+      ]);
+
+      // Clear attachments
+      setAttachedFiles([]);
+      window.dispatchEvent(new CustomEvent('attachments:cleared'));
+      
+      scrollToBottom();
+    } catch (err) {
+      console.error('❌ Submit error:', err);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: 'Sorry, I could not process that request.',
+          isUser: false,
+          noBubble: true,
+        },
+      ]);
+    } finally {
+      setIsSubmitting(false);
+      setIsGenerating(false);
+      isSendingRef.current = false;
+    }
+  },
+  [supabase, threadId, initiatedThreadId, attachedFiles, scrollToBottom, backendBase, isGenerating]
+);
+
+
 /* ---------------------------------------------------------
    Auto-submit first message from Welcome page
 --------------------------------------------------------- */

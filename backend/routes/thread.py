@@ -97,93 +97,6 @@ router = APIRouter(tags=["Thread"])
 async def get_current_user_id(request: Request) -> Optional[str]:
     """
     Extract user_id from request headers.
-    
-    Priority order (TEMPORARILY SWAPPED):
-    1. X-User-ID: <user_id> (TEMPORARY - FOR DEVELOPMENT)
-    2. Authorization: Bearer <supabase_token>
-    
-    Returns:
-        user_id if authenticated, None otherwise
-    """
-    try:
-        # ═══════════════════════════════════════════════════════════
-        # METHOD 1: X-User-ID Header (TEMPORARY FIRST PRIORITY)
-        # ═══════════════════════════════════════════════════════════
-        user_id_header = request.headers.get("X-User-ID", "").strip()
-        if user_id_header:
-            try:
-                # Validate it's a proper UUID format
-                uuid.UUID(user_id_header)
-                print(f"✅ Authenticated via X-User-ID: {user_id_header}")
-                return user_id_header
-            except ValueError:
-                print(f"❌ Invalid X-User-ID format: {user_id_header}")
-        
-        # ═══════════════════════════════════════════════════════════
-        # METHOD 2: Authorization Bearer Token (FALLBACK)
-        # ═══════════════════════════════════════════════════════════
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header.replace("Bearer ", "").strip()
-            
-            if token:
-                try:
-                    # Try to decode JWT
-                    import jwt
-                    
-                    decoded = jwt.decode(
-                        token, 
-                        options={"verify_signature": False}
-                    )
-                    
-                    user_id = decoded.get('sub')
-                    
-                    if user_id:
-                        print(f"✅ Authenticated via Bearer token (JWT): {user_id}")
-                        return user_id
-                        
-                except Exception as e:
-                    print(f"⚠️ Bearer token verification error: {e}")
-        
-        # ═══════════════════════════════════════════════════════════
-        # NO AUTHENTICATION FOUND
-        # ═══════════════════════════════════════════════════════════
-        print("❌ No valid authentication found (no Bearer token or X-User-ID)")
-        return None
-    
-    except Exception as e:
-        print(f"❌ Critical error in get_current_user_id: {e}")
-        traceback.print_exc()
-        return None
-        
-        # ═══════════════════════════════════════════════════════════
-        # METHOD 2: X-User-ID Header (DEVELOPMENT/TESTING FALLBACK)
-        # ═══════════════════════════════════════════════════════════
-        user_id_header = request.headers.get("X-User-ID", "").strip()
-        if user_id_header:
-            try:
-                # Validate it's a proper UUID format
-                uuid.UUID(user_id_header)
-                print(f"⚠️ Using X-User-ID header (DEV MODE): {user_id_header}")
-                print("⚠️ WARNING: X-User-ID should only be used in development!")
-                return user_id_header
-            except ValueError:
-                print(f"❌ Invalid X-User-ID format: {user_id_header}")
-        
-        # ═══════════════════════════════════════════════════════════
-        # NO AUTHENTICATION FOUND
-        # ═══════════════════════════════════════════════════════════
-        print("❌ No valid authentication found (no Bearer token or X-User-ID)")
-        return None
-    
-    except Exception as e:
-        print(f"❌ Critical error in get_current_user_id: {e}")
-        traceback.print_exc()
-        return None
-
-async def get_current_user_id(request: Request) -> Optional[str]:
-    """
-    Extract user_id from request headers.
     """
     try:
         # ✅ DEBUG: Print ALL headers received
@@ -377,7 +290,7 @@ class MessageBody(BaseModel):
     model_config = {"protected_namespaces": ()}
 
     message: str
-    model_name: Optional[str] = "gemini-2.0-flash-exp"
+    model_name: Optional[str] = "gpt-4o-mini"
     agent: Optional[str] = "default"
     attachments: Optional[List[Dict[str, Any]]] = []
 
@@ -491,7 +404,7 @@ async def start_agent_run(thread_id: str, request: Request):
         body = await request.json()
 
         message = (body.get("message") or "").strip()
-        model_name = body.get("model_name", "gemini-2.0-flash-exp")
+        model_name = body.get("model_name", "gpt-4o-mini")
         agent = body.get("agent", "default")
         attachments = body.get("attachments", []) or []
 
@@ -556,17 +469,26 @@ async def start_agent_run(thread_id: str, request: Request):
                 .select("role, content, created_at")
                 .eq("thread_id", thread_id)
                 .order("created_at", desc=False)
-                .limit(16)  # Last 8 messages
+                .limit(60)  # Last 60 messages
                 .execute()
             )
             
             history = history_res.data or []
             if history:
                 stm_lines = []
-                for msg in history[-16:]:
+                # ✅ NEW: Initialize document context
+                document_context = ""
+                for msg in history:  # Process ALL messages, not just last 16
                     role = msg.get("role", "user")
                     content = (msg.get("content") or "").strip()
-                    if content:
+                    
+                    # ✅ Extract document context from system messages
+                    if role == "system" and "[DOCUMENT CONTEXT" in content:
+                        document_context += f"\n{content}\n"
+                        print(f"📄 Found document context: {len(content)} chars")
+                    
+                    # Regular conversation history
+                    if content and role in ["user", "assistant"]:
                         stm_lines.append(f"{role}: {content}")
                 
                 recent_context = "\n".join(stm_lines)
@@ -882,8 +804,21 @@ async def start_agent_run(thread_id: str, request: Request):
             f"Vision={len(vision_metadata)}"
         )
 
+        # ✅ Enhance message with document context
+        enhanced_message = message
+        if document_context:
+            print(f"📄 Including document context in AI request ({len(document_context)} chars)")
+            enhanced_message = f"""You have access to the following document that was previously uploaded in this conversation. Use ONLY the exact information from this document to answer questions. Do not make up dates, numbers, or any other details.
+
+        {document_context}
+
+        Based ONLY on the above document, answer this question accurately:
+        {message}"""
+        else:
+            print(f"ℹ️ No document context found")
+
         raw_result = await run_openai_agent(
-            message,
+            enhanced_message,
             ocr=ocr_metadata,
             vision=vision_metadata,
             conversation=recent_context,
@@ -891,6 +826,11 @@ async def start_agent_run(thread_id: str, request: Request):
             long_term_memory=ltm_string,
             model_name=model_name,
             agent=agent,
+            # ✅ Injecting a strict personality for document reliability
+            system_prompt="""You are a precise document analyzer. 
+            When asked about documents, provide exact information from the text. 
+            Never invent dates, numbers, or details. 
+            If information is not in the document, say 'Not mentioned in the document'."""
         )
 
         # ──────────────────────────────────────────
@@ -1683,7 +1623,7 @@ Latest update:
                 import google.generativeai as genai
                 import asyncio
 
-                model = _get_model("gemini-2.0-flash-exp")
+                model = _get_model("gpt-4o-mini")
                 loop = asyncio.get_event_loop()
                 mtm_result = await loop.run_in_executor(
                     None,
@@ -2171,6 +2111,76 @@ Analyze which response is most accurate, comprehensive, and helpful. Provide a 2
         print(f"❌ Triplet endpoint error: {e}")
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
+    
+    # ════════════════════════════════════════════════════════════
+    # STORE DOCUMENT CONTEXT IN THREAD
+    # ════════════════════════════════════════════════════════════
+    @router.post("/{thread_id}/add-context")
+    async def add_document_context(
+        thread_id: str,
+        request: Request,
+    ):
+        """
+        Store extracted document content as a system message in the thread
+        This makes it available for all future questions in this conversation
+        """
+        try:
+            print(f"\n{'='*60}")
+            print(f"📝 ADD-CONTEXT ENDPOINT CALLED")
+            print(f"   Thread ID: {thread_id}")
+            print(f"{'='*60}\n")
+                    
+            user_id = await get_current_user_id(request)
+            user_id = require_user(user_id)
+                    
+            print(f"✅ User authenticated: {user_id}")
+                    
+            body = await request.json()
+            context = body.get("context", "")
+            context_type = body.get("type", "document_extraction")
+                    
+            if not context:
+                print("❌ ERROR: No context provided")
+                raise HTTPException(status_code=400, detail="No context provided")
+                    
+            print(f"📄 Context received: {len(context)} chars")
+            print(f"   Type: {context_type}")
+                    
+            # Get Supabase client
+            supabase = get_supabase()
+                    
+            # ✅ Store as a SYSTEM message in messages table
+            message_data = {
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "role": "system",  # CRITICAL: System role
+                "content": f"[DOCUMENT CONTEXT - {context_type}]\n\n{context}",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+                    
+            print(f"💾 Inserting into database...")
+            result = supabase.table("messages").insert(message_data).execute()
+                    
+            print(f"✅ Context stored successfully!")
+            print(f"   Result: {result.data}\n")
+                    
+            return JSONResponse({
+                "status": "success",
+                "message": "Context stored successfully",
+                "thread_id": thread_id,
+                "context_length": len(context),
+            })
+                
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f"\n{'!'*60}")
+            print(f"❌ CRITICAL ERROR in add-context:")
+            print(f"   {e}")
+            print(f"{'!'*60}\n")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(e))
 
 # ════════════════════════════════════════════════════════════════════
 # WHAT THIS DOES:
