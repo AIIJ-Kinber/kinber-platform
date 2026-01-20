@@ -243,13 +243,11 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
 
 /* ---------- Backend Base ---------- */
 const backendBase = useMemo(() => {
-  // ✅ Simple and reliable: Use env var or fallback to localhost
+  // ✅ Always use environment variable
   const url = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-  
-  // Remove trailing slashes for consistency
+  console.log('🔍 Dashboard Backend URL:', url);
   return url.replace(/\/+$/, '');
 }, []);
-console.log('🔍 Dashboard Backend URL:', backendBase);
 /* ---------------------------------------------------------
      Scroll helper
   --------------------------------------------------------- */
