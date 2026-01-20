@@ -6,7 +6,8 @@ import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import MessageInput from '@/_components/thread/chat-input/message-input';
 
-const TRIPLET_API_URL = 'http://127.0.0.1:8000/api/triplet';
+// ✅ FIXED: Use environment variable instead of hardcoded localhost
+const TRIPLET_API_URL = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/triplet`;
 
 export default function TripletClient() {
   const router = useRouter();
@@ -46,6 +47,9 @@ export default function TripletClient() {
         return;
       }
 
+      // ✅ Log for debugging
+      console.log('🚀 Calling Triplet API:', TRIPLET_API_URL);
+
       const res = await fetch(TRIPLET_API_URL, {
         method: 'POST',
         headers: {
@@ -63,6 +67,8 @@ export default function TripletClient() {
       }
 
       if (!res.ok) {
+        const errorText = await res.text();
+        console.error('❌ API Error:', res.status, errorText);
         throw new Error(`HTTP error! status: ${res.status}`);
       }
 

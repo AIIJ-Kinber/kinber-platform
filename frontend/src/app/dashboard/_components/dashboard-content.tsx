@@ -243,25 +243,12 @@ export default function DashboardContent({ threadId }: { threadId?: string }) {
 
 /* ---------- Backend Base ---------- */
 const backendBase = useMemo(() => {
-  const envUrl = (process.env.NEXT_PUBLIC_BACKEND_URL || '').trim();
-
-  if (envUrl) {
-    return envUrl.replace(/\/+$/, '');
-  }
-
-  if (typeof window !== 'undefined') {
-    if (
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1'
-    ) {
-      return 'http://127.0.0.1:8000';
-    }
-  }
-
-  // ✅ Production: SAME ORIGIN (Vercel proxy → Railway)
-  return '/api';
+  // ✅ Simple and reliable: Use env var or fallback to localhost
+  const url = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
+  
+  // Remove trailing slashes for consistency
+  return url.replace(/\/+$/, '');
 }, []);
-
 /* ---------------------------------------------------------
      Scroll helper
   --------------------------------------------------------- */
