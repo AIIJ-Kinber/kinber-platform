@@ -249,6 +249,7 @@ const backendBase = useMemo(() => {
   // Remove trailing slashes for consistency
   return url.replace(/\/+$/, '');
 }, []);
+console.log('🔍 Dashboard Backend URL:', backendBase);
 /* ---------------------------------------------------------
      Scroll helper
   --------------------------------------------------------- */
