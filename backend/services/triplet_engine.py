@@ -162,55 +162,40 @@ async def _generate_blind_verdict(prompt: str, results: Dict[str, str]) -> str:
 
 """
         
-        # ✅ Step 5: Create evaluation prompt with model names
-        jury_prompt = f"""You are an impartial AI jury evaluating responses from three leading AI models.
+        jury_prompt = f"""You are a professional AI Analyst providing a high-level executive summary and synthesis. 
+Your goal is to provide a clean, readable, and highly useful comparison without excessive formatting clutter.
 
-**ORIGINAL QUESTION:**
+---
+**ORIGINAL QUERY:**
 {prompt}
 
-{'─' * 60}
-
-**MODEL RESPONSES (EVALUATED ANONYMOUSLY):**
-
+---
+**INPUT RESPONSES:**
 {responses_section}
+---
 
-{'─' * 60}
+**INSTRUCTIONS:**
+1. Provide a crisp Scorecard for the three models.
+2. Under "EXECUTIVE INSIGHTS", explain why the winner was chosen in 1-2 sentences.
+3. Under "THE OPTIMAL RESPONSE", provide a single, perfectly synthesized answer that combines the best parts of all three responses.
 
-**YOUR TASK:**
+**OUTPUT FORMAT (FOLLOW EXACTLY):**
 
-1. **Evaluate each model** based on:
-   • Accuracy and correctness
-   • Clarity and coherence  
-   • Completeness and depth
-   • Relevance and usefulness
+### 📊 Model Scorecard
+* **GPT-4o:** [X]/10 — [Brief, professional remark]
+* **Claude 3.5 Sonnet:** [X]/10 — [Brief, professional remark]
+* **DeepSeek-V3:** [X]/10 — [Brief, professional remark]
 
-2. **Score and identify** the models with brief reasoning
+### 💡 Executive Insights
+[Briefly explain which model handled the specific nuance of the prompt best and why.]
 
-3. **Synthesize the best answer** combining insights from all responses
+### 🎯 The Optimal Response
+[Provide the high-quality, synthesized final answer here. Use clean paragraphs and bullet points only where necessary. Avoid excessive bolding or decorative characters.]
 
-**REQUIRED FORMAT:**
-
-📊 **EVALUATION:**
-
-**OpenAI GPT-4o:** [X]/10
-*Reasoning:* [One clear sentence]
-
-**Claude Opus 4.5:** [X]/10  
-*Reasoning:* [One clear sentence]
-
-**DeepSeek:** [X]/10
-*Reasoning:* [One clear sentence]
-
-{'─' * 60}
-
-🎯 **ENHANCED FINAL ANSWER:**
-
-[Your superior synthesized answer that combines the best insights from all three models]
-
-**IMPORTANT:** The responses above were presented to you anonymously. Now that you know which is which, provide honest, unbiased scores based purely on response quality. Remember:
-- Model A was: {model_mapping.get('A', 'Unknown')}
-- Model B was: {model_mapping.get('B', 'Unknown')}
-- Model C was: {model_mapping.get('C', 'Unknown')}
+**Note for Analyst:**
+Model A was: {model_mapping.get('A', 'Unknown')}
+Model B was: {model_mapping.get('B', 'Unknown')}
+Model C was: {model_mapping.get('C', 'Unknown')}
 """
 
         # ✅ Step 6: Call Jury (GPT-4o for best reasoning)
