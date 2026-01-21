@@ -103,7 +103,7 @@ async def _generate_blind_verdict(prompt: str, results: Dict[str, str]) -> str:
         results: Dict with 'gpt', 'claude', 'deepseek' responses
     
     Returns:
-        Verdict text with blind evaluation and synthesis
+        Verdict text with evaluation and synthesis
     """
     try:
         print("\n⚖️ Generating blind jury verdict...")
@@ -162,66 +162,59 @@ async def _generate_blind_verdict(prompt: str, results: Dict[str, str]) -> str:
 
 """
         
-        # ✅ Step 5: Create blind evaluation prompt
-        jury_prompt = f"""You are an impartial AI jury. You are evaluating responses from THREE ANONYMOUS AI models. 
-
-**CRITICAL RULES:**
-- You do NOT know which company made which model
-- You MUST refer to them ONLY as "Model A", "Model B", and "Model C"
-- DO NOT guess or mention any model names (like GPT, Claude, DeepSeek, etc.)
-- Evaluate based purely on response quality
+        # ✅ Step 5: Create evaluation prompt with model names
+        jury_prompt = f"""You are an impartial AI jury evaluating responses from three leading AI models.
 
 **ORIGINAL QUESTION:**
 {prompt}
 
-{'═' * 60}
+{'─' * 60}
 
-**ANONYMOUS MODEL RESPONSES:**
+**MODEL RESPONSES (EVALUATED ANONYMOUSLY):**
 
 {responses_section}
 
-{'═' * 60}
+{'─' * 60}
 
 **YOUR TASK:**
 
-1. **Score each anonymous model** out of 10 based on:
+1. **Evaluate each model** based on:
    • Accuracy and correctness
    • Clarity and coherence  
    • Completeness and depth
-   • Relevance to the question
-   • Practical usefulness
+   • Relevance and usefulness
 
-2. **Provide brief reasoning** for each score (one sentence)
+2. **Score and identify** the models with brief reasoning
 
-3. **Synthesize the best answer** by combining the strongest insights from all three responses
+3. **Synthesize the best answer** combining insights from all responses
 
 **REQUIRED FORMAT:**
 
 📊 **EVALUATION:**
 
-**Model A:** [X]/10
-*Reasoning:* [One sentence - do NOT mention model names]
+**OpenAI GPT-4o:** [X]/10
+*Reasoning:* [One clear sentence]
 
-**Model B:** [X]/10  
-*Reasoning:* [One sentence - do NOT mention model names]
+**Claude Opus 4.5:** [X]/10  
+*Reasoning:* [One clear sentence]
 
-**Model C:** [X]/10
-*Reasoning:* [One sentence - do NOT mention model names]
+**DeepSeek:** [X]/10
+*Reasoning:* [One clear sentence]
 
 {'─' * 60}
 
 🎯 **ENHANCED FINAL ANSWER:**
 
-[Your synthesized answer combining the best from all three. Do NOT reveal which insights came from which model.]
+[Your superior synthesized answer that combines the best insights from all three models]
 
-{'─' * 60}
-
-**REMINDER:** You are evaluating ANONYMOUS models. Do not guess or mention company names.
+**IMPORTANT:** The responses above were presented to you anonymously. Now that you know which is which, provide honest, unbiased scores based purely on response quality. Remember:
+- Model A was: {model_mapping.get('A', 'Unknown')}
+- Model B was: {model_mapping.get('B', 'Unknown')}
+- Model C was: {model_mapping.get('C', 'Unknown')}
 """
 
-
         # ✅ Step 6: Call Jury (GPT-4o for best reasoning)
-        print("⚖️ Calling jury (GPT-4o) for blind evaluation...")
+        print("⚖️ Calling jury (GPT-4o) for evaluation...")
         
         verdict_response = await asyncio.to_thread(
             openai_client.chat.completions.create,
@@ -229,41 +222,29 @@ async def _generate_blind_verdict(prompt: str, results: Dict[str, str]) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": "You are an expert AI jury providing unbiased evaluations of AI model responses. Be fair, thorough, and insightful."
+                    "content": "You are an expert AI jury providing fair, unbiased evaluations of AI model responses. Be thorough, honest, and insightful."
                 },
                 {
                     "role": "user",
                     "content": jury_prompt
                 }
             ],
-            temperature=0.3,  # Lower temperature for more consistent evaluation
+            temperature=0.3,
         )
         
         verdict_text = verdict_response.choices[0].message.content
         
-        # ✅ Step 7: Add model reveal (for transparency)
-        reveal_section = f"""
+        # ✅ Step 7: Add professional disclaimer
+        disclaimer = f"""
 
-{'═' * 60}
-
-🔍 **MODEL IDENTITY REVEALED:**
-
-{'═' * 60}
-
-"""
-        
-        for label in sorted(model_mapping.keys()):
-            reveal_section += f"**Model {label}:** {model_mapping[label]}\n"
-        
-        reveal_section += f"""
-{'═' * 60}
+{'─' * 60}
 
 *Note: The jury evaluated these responses without knowing which model produced which answer, ensuring an unbiased assessment based purely on quality.*
 """
         
-        final_verdict = verdict_text + reveal_section
+        final_verdict = verdict_text + disclaimer
         
-        print(f"✅ Blind verdict generated: {len(final_verdict)} characters")
+        print(f"✅ Verdict generated: {len(final_verdict)} characters")
         return final_verdict
         
     except Exception as e:
