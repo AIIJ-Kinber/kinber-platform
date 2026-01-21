@@ -23,9 +23,9 @@ class TripletRequest(BaseModel):
     document_context: Optional[str] = None
 
 
-# --------------------------------------------------
+# --------------------------------------------------#
 # Triplet Endpoint (PDF + IMAGE AWARE)
-# --------------------------------------------------
+# --------------------------------------------------#
 @router.post("/triplet")
 async def triplet_endpoint(payload: TripletRequest):
     print(
@@ -39,7 +39,7 @@ async def triplet_endpoint(payload: TripletRequest):
     extracted_documents: List[str] = []
     vision_extracts: List[str] = []
 
-    # --------------------------------------------------
+    # --------------------------------------------------#
     # Process attachments
     # --------------------------------------------------
     for file in payload.attachments or []:
