@@ -36,7 +36,131 @@ import {
   Settings,
   Globe,
   Github,
+  type LucideIcon,
 } from 'lucide-react';
+
+/* --------------------------------------------------------
+   Type Definitions & Interfaces
+-------------------------------------------------------- */
+interface FetchDriveFileResponse {
+  blob: Blob;
+  base64: string;
+}
+
+interface FileAttachedEventDetail extends Attachment {
+  [key: string]: string | number | null | undefined;
+}
+
+interface FileAttachedEvent extends CustomEvent {
+  detail: FileAttachedEventDetail;
+}
+
+interface ToolMenuItem {
+  icon: React.ReactNode;
+  label: string;
+  key: string;
+}
+
+interface AgentOption {
+  label: string;
+}
+
+interface QuickActionButton {
+  label: string;
+  icon: React.ReactNode;
+}
+
+interface GoogleTokenResponse {
+  access_token: string;
+  [key: string]: unknown;
+}
+
+interface GooglePickerCallback {
+  action: string;
+  docs?: GooglePickerDocument[];
+}
+
+interface GooglePickerDocument {
+  id: string;
+  name: string;
+  mimeType: string;
+}
+
+interface GISTokenClient {
+  callback?: (response: GoogleTokenResponse) => void;
+  requestAccessToken: () => void;
+}
+
+interface GoogleGlobal {
+  picker?: {
+    DocsView: new () => GoogleDocsView;
+    PickerBuilder: new () => GooglePickerBuilder;
+    Feature: {
+      NAV_HIDDEN: string;
+      MULTISELECT_ENABLED: string;
+    };
+    Action: {
+      PICKED: string;
+    };
+  };
+  accounts?: {
+    oauth2: {
+      initTokenClient: (config: TokenClientConfig) => GISTokenClient;
+    };
+  };
+}
+
+interface TokenClientConfig {
+  client_id: string;
+  scope: string;
+  callback: (response: GoogleTokenResponse) => void;
+}
+
+interface GoogleDocsView {
+  setIncludeFolders: (value: boolean) => GoogleDocsView;
+  setSelectFolderEnabled: (value: boolean) => GoogleDocsView;
+  setMimeTypes: (types: string) => GoogleDocsView;
+}
+
+interface GooglePickerBuilder {
+  setAppId: (id: string) => GooglePickerBuilder;
+  setOAuthToken: (token: string) => GooglePickerBuilder;
+  setDeveloperKey: (key: string) => GooglePickerBuilder;
+  addView: (view: GoogleDocsView) => GooglePickerBuilder;
+  enableFeature: (feature: string) => GooglePickerBuilder;
+  setCallback: (callback: (data: GooglePickerCallback) => Promise<void>) => GooglePickerBuilder;
+  setSize: (width: number, height: number) => GooglePickerBuilder;
+  setOrigin: (origin: string) => GooglePickerBuilder;
+  build: () => GooglePicker;
+}
+
+interface GooglePicker {
+  setVisible: (visible: boolean) => void;
+}
+
+interface SupabaseAuthSession {
+  provider_token?: string;
+  [key: string]: unknown;
+}
+
+interface AuthStateChangeData {
+  event: string;
+  session: SupabaseAuthSession | null;
+}
+
+interface FileInputChangeEvent {
+  target: HTMLInputElement & { files: FileList | null };
+}
+
+interface PasteEventWithClipboard extends ClipboardEvent {
+  clipboardData: DataTransfer | null;
+}
+
+interface MenuState {
+  isPlusOpen: boolean;
+  isToolsOpen: boolean;
+  isAgentOpen: boolean;
+}
 
 /* --------------------------------------------------------
    Helper: Convert blob/file → Base64
