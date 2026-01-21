@@ -127,13 +127,13 @@ async function fetchDriveFile(
   }
 }
 
-type Attachment = {
+interface Attachment {
   name: string;
   url: string;
   type?: string;
   size?: number;
   base64?: string | null;
-};
+}
 
 /* ---------------------------------------------------------
    Render file thumbnail
@@ -243,6 +243,9 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
   ) => {
     const [inputValue, setInputValue] = useState(value);
     const [attachedFiles, setAttachedFiles] = useState<Attachment[]>([]);
+    useEffect(() => {
+     onAttachmentsChange?.(attachedFiles);
+    }, [attachedFiles]);
     const MotionButton = motion.button;
 
     const supabase = createClient();
@@ -269,10 +272,15 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
     --------------------------------------------------------- */
     const addAttachment = (detail: Attachment) => {
       setAttachedFiles((prev) => {
-        const updated = [...prev, detail];
-        onAttachmentsChange?.(updated);
-        return updated;
+        return [...prev, detail];
       });
+
+      // 🔑 notify parent AFTER state update
+      setTimeout(() => {
+        onAttachmentsChange?.((prevFiles) => {
+          return [...prevFiles, detail];
+        });
+      }, 0);
     };
 
     /* ---------------------------------------------------------
@@ -690,11 +698,7 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
         }
 
         if (uploaded.length > 0) {
-          setAttachedFiles((prev) => {
-            const updated = [...prev, ...uploaded];
-            onAttachmentsChange?.(updated);
-            return updated;
-          });
+          setAttachedFiles((prev) => [...prev, ...uploaded]);
         }
       };
 

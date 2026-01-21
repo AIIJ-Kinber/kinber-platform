@@ -4,6 +4,7 @@ from fastapi import APIRouter, Request, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import Any, Dict, List, Optional
+from backend.utils.attachment_extractor import extract_attachment_text
 
 import traceback
 import uuid
@@ -22,67 +23,10 @@ from backend.db.supabase_client import get_supabase
 from backend.services.openai_agent import run_openai_agent, analyze_image_with_openai
 
 # --------------------------------------------------
-# Attachment text extraction (SAFE PLACEHOLDER)
+# Attachment text extraction (SHARED UTILITY)
 # --------------------------------------------------
-import pdfplumber
 from io import BytesIO
-from typing import Any
-
-def extract_attachment_text(source: Any) -> str:
-    """
-    Extract text from PDF files with better Arabic support.
-    Uses pdfplumber which handles RTL languages better than PyPDF2.
-    
-    Args:
-        source: BytesIO object containing PDF bytes
-    
-    Returns:
-        Extracted text as string
-    """
-    try:
-        if isinstance(source, BytesIO):
-            # Reset stream position
-            source.seek(0)
-            
-            text_parts = []
-            
-            # Use pdfplumber for better text extraction
-            with pdfplumber.open(source) as pdf:
-                for page_num, page in enumerate(pdf.pages):
-                    try:
-                        # Extract text with layout preserved
-                        page_text = page.extract_text(
-                            layout=True,  # Preserve layout
-                            x_tolerance=3,
-                            y_tolerance=3
-                        )
-                        
-                        if page_text and page_text.strip():
-                            text_parts.append(f"--- صفحة {page_num + 1} / Page {page_num + 1} ---\n{page_text}")
-                            
-                    except Exception as e:
-                        print(f"⚠️ Failed to extract page {page_num + 1}: {e}")
-                        continue
-            
-            extracted = "\n\n".join(text_parts)
-            
-            if extracted.strip():
-                print(f"✅ Successfully extracted {len(extracted)} characters from PDF")
-                print(f"📝 First 200 chars: {extracted[:200]}...")
-                return extracted
-            else:
-                print("⚠️ PDF appears to be empty or contains only images")
-                return ""
-        
-        else:
-            print(f"⚠️ Unsupported source type: {type(source)}")
-            return ""
-    
-    except Exception as e:
-        print(f"❌ PDF extraction error: {e}")
-        import traceback
-        traceback.print_exc()
-        return ""
+from backend.utils.attachment_extractor import extract_attachment_text
 
 # --------------------------------------------------
 # Router
