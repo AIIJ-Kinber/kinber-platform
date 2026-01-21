@@ -6,7 +6,6 @@ import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import MessageInput from '@/_components/thread/chat-input/message-input';
 
-// ✅ FIXED: Use environment variable instead of hardcoded localhost
 const TRIPLET_API_URL = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/triplet`;
 
 export default function TripletClient() {
@@ -47,7 +46,6 @@ export default function TripletClient() {
         return;
       }
 
-      // ✅ Log for debugging
       console.log('🚀 Calling Triplet API:', TRIPLET_API_URL);
 
       const res = await fetch(TRIPLET_API_URL, {
@@ -108,16 +106,16 @@ export default function TripletClient() {
   );
 
   return (
-    <div className="flex flex-col h-full justify-between items-center w-full px-6">
+    <div className="flex flex-col w-full">
       {/* RESULTS */}
-      <div className="w-full max-w-[1400px] grid grid-cols-1 md:grid-cols-3 gap-8 mt-6 mb-10">
+      <div className="w-full grid grid-cols-1 md:grid-cols-3 gap-8 mt-6 mb-10">
         {renderCard('/chatgpt_logo.png', results?.gpt)}
         {renderCard('/claude_logo.png', results?.claude)}
         {renderCard('/deepseek_logo.png', results?.deepseek)}
       </div>
 
-      {/* VERDICT */}
-      <div className="w-full max-w-[1400px] mb-8">
+      {/* VERDICT - with internal scrolling for long content */}
+      <div className="w-full mb-8">
         <div className="rounded-2xl bg-[#1b1b1b] border border-neutral-700 p-6">
           <div className="h-8 mb-4 flex items-center">
             <Image
@@ -134,15 +132,15 @@ export default function TripletClient() {
               <div className="h-4 bg-gray-700 rounded w-full" />
             </div>
           ) : (
-            <p className="text-white text-[20px] leading-relaxed whitespace-pre-wrap">
+            <div className="text-white text-[18px] leading-relaxed whitespace-pre-wrap max-h-[500px] overflow-y-auto pr-2">
               {results?.verdict}
-            </p>
+            </div>
           )}
         </div>
       </div>
 
-      {/* INPUT - CENTERED WITH TRANSFORM */}
-      <div className="w-full max-w-[1400px] mx-auto mb-6">
+      {/* INPUT - CENTERED */}
+      <div className="w-full mb-6">
         <div 
           style={{
             position: 'relative',

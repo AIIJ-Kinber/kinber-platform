@@ -11,11 +11,10 @@ export default function TripletLayout({
   return (
     <DashboardLayout>
       {/* 
-        Triplet-specific width override
-        Sidebar still comes from DashboardLayout
-        REMOVED px-6 to prevent padding interference
+        Triplet-specific container with scrolling enabled
+        This is the main scroll container for the entire page
       */}
-      <div className="w-full max-w-[1400px] mx-auto py-6">
+      <div className="w-full max-w-[1400px] mx-auto py-6 px-6 overflow-y-auto h-full">
         {children}
       </div>
     </DashboardLayout>
