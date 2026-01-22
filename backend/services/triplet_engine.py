@@ -2,20 +2,19 @@
 
 import asyncio
 import base64
+import os
 from typing import Dict, List, Optional
 from openai import OpenAI
 from anthropic import Anthropic
 
-from backend.config import settings
-
-# Initialize clients
-openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
-anthropic_client = Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+# Initialize clients with environment variables
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+anthropic_client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 try:
     from openai import OpenAI as DeepSeekClient
     deepseek_client = DeepSeekClient(
-        api_key=settings.DEEPSEEK_API_KEY,
+        api_key=os.getenv("DEEPSEEK_API_KEY"),
         base_url="https://api.deepseek.com"
     )
 except Exception as e:
@@ -23,9 +22,9 @@ except Exception as e:
     deepseek_client = None
 
 
-# ------------------------------------------------------------
+# ----------------------------------
 # Model calls with vision support
-# ------------------------------------------------------------
+# ---------------------------------
 async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
     """Call OpenAI GPT-4o with vision support"""
     try:
@@ -224,9 +223,9 @@ Keep it concise (200-300 words). Be fair and evidence-based."""
         return f"**Verdict Generation Failed:** {str(e)}\n\nAll three responses are displayed above for your review."
 
 
-# ------------------------------------------------------------
+# ------------------------------------------------
 # Main Triplet Runner
-# ------------------------------------------------------------
+# ------------------------------------------------
 async def run_triplet(prompt: str, attachments: Optional[List] = None) -> dict:
     """
     Run the same prompt across GPT-4o, Claude Opus, and DeepSeek
@@ -244,7 +243,7 @@ async def run_triplet(prompt: str, attachments: Optional[List] = None) -> dict:
     print(f"{'═' * 60}")
     print(f"Prompt: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
     
-    # Check for image attachments
+    # Check for image attachments #
     has_images = False
     if attachments:
         has_images = any(att.get("type", "").startswith("image/") for att in attachments)
