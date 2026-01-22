@@ -394,15 +394,17 @@ export const MessageInput = forwardRef<HTMLTextAreaElement, MessageInputProps>(
     /* ---------------------------------------------------------
        Helper: add attachment locally + bubble up
     --------------------------------------------------------- */
-    const addAttachment = (detail: Attachment) => {
-      setAttachedFiles((prev) => {
+    const addAttachment = (detail: Attachment): void => {
+      setAttachedFiles((prev: Attachment[]) => {
         return [...prev, detail];
       });
 
       // 🔑 notify parent AFTER state update
       setTimeout(() => {
-        onAttachmentsChange?.((prevFiles) => {
-          return [...prevFiles, detail];
+        setAttachedFiles((prevFiles: Attachment[]) => {
+          const updated: Attachment[] = [...prevFiles, detail];
+          onAttachmentsChange?.(updated);
+          return updated;
         });
       }, 0);
     };
