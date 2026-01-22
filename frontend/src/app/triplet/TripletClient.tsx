@@ -150,6 +150,8 @@ export default function TripletClient() {
           onAttachmentsChange={setAttachments}
           placeholder="Ask Triplet AI…"
           loading={loading}
+          disabled={loading}          // ✅ REQUIRED
+          isAgentRunning={loading}    // ✅ REQUIRED
           isLoggedIn
         />
       </div>
