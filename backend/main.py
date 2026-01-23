@@ -3,6 +3,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from backend.routes import chat
+from backend.routes import triplet
 import traceback
 import logging
 from dotenv import load_dotenv
@@ -140,6 +141,7 @@ try:
     app.include_router(actions_router, prefix="/api/actions", tags=["Actions"])
     app.include_router(tools_router, prefix="/api/tools", tags=["Tools"])
     app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+    app.include_router(triplet.router, prefix="/api", tags=["triplet"])
     
     logger.info("✅ All routers loaded successfully")
     

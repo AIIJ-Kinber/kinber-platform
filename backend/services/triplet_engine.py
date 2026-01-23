@@ -271,6 +271,81 @@ async def run_triplet(
     print(f"📊 GPT: {'✅' if not gpt_res.startswith('GPT Error:') else '❌'} ({len(gpt_res)}ch)")
     print(f"📊 Claude: {'✅' if not claude_res.startswith('Claude Error:') else '❌'} ({len(claude_res)}ch)")
     print(f"📊 DeepSeek: {'✅' if not deepseek_res.startswith('DeepSeek Error:') else '❌'} ({len(deepseek_res)}ch)")
+
+    async def run_triplet_streaming(
+    prompt: str, 
+    attachments: Optional[List] = None, 
+    skip_ai_verdict: bool = False
+):
+    """
+    Stream Triplet results as they complete
+    
+    Yields:
+        Dict chunks with model responses and verdict
+    """
+    print(f"\n{'═' * 60}")
+    print(f"🔀⚡ STREAMING TRIPLET")
+    print(f"{'═' * 60}")
+    
+    has_images = False
+    if attachments:
+        has_images = any(att.get("type", "").startswith("image/") for att in attachments)
+    
+    start = asyncio.get_event_loop().time()
+    
+    # Create tasks for all 3 models
+    tasks = {
+        "gpt": asyncio.create_task(_get_gpt(prompt, attachments)),
+        "claude": asyncio.create_task(_get_claude(prompt, attachments)),
+        "deepseek": asyncio.create_task(_get_deepseek(prompt, attachments)),
+    }
+    
+    results = {}
+    
+    # Stream each result as it completes
+    for model_name, task in tasks.items():
+        try:
+            result = await task
+            results[model_name] = result
+            elapsed = asyncio.get_event_loop().time() - start
+            
+            print(f"✅ {model_name}: {elapsed:.1f}s ({len(result)}ch)")
+            
+            # Send this model's result immediately
+            yield {
+                "model": model_name,
+                "response": result,
+                "elapsed": round(elapsed, 1)
+            }
+            
+        except Exception as e:
+            error_msg = f"{model_name.upper()} Error: {str(e)}"
+            results[model_name] = error_msg
+            yield {
+                "model": model_name,
+                "response": error_msg,
+                "error": True
+            }
+    
+    # Generate verdict after all models complete
+    if not skip_ai_verdict:
+        print(f"⚡ Generating verdict...")
+        verdict_start = asyncio.get_event_loop().time()
+        verdict = await _generate_blind_verdict(prompt, results, has_images=has_images)
+        verdict_time = asyncio.get_event_loop().time() - verdict_start
+        print(f"✅ Verdict: {verdict_time:.1f}s")
+    else:
+        verdict = "Verdict skipped for faster response."
+    
+    # Send verdict
+    yield {
+        "model": "verdict",
+        "response": verdict
+    }
+    
+    total = asyncio.get_event_loop().time() - start
+    print(f"✅ TOTAL: {total:.1f}s\n")
+
     
     # ✅ Generate verdict
     if skip_ai_verdict:
