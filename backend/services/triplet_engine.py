@@ -23,14 +23,12 @@ except Exception as e:
 
 
 # ------------------------------------------------------------
-# Model calls with vision support
+# OPTIMIZED Model calls with vision support
 # ------------------------------------------------------------
 async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call OpenAI GPT-4o with vision support"""
+    """Call OpenAI GPT-4o with vision support - OPTIMIZED"""
     try:
         messages = []
-        
-        # Build message content with text and images
         content = []
         
         # Add text prompt
@@ -40,7 +38,6 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
         if attachments:
             for att in attachments:
                 if att.get("type", "").startswith("image/"):
-                    # Extract base64 data
                     base64_data = att.get("base64", "")
                     if base64_data.startswith("data:"):
                         base64_data = base64_data.split(",", 1)[1]
@@ -59,8 +56,8 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
             openai_client.chat.completions.create,
             model="gpt-4o",
             messages=messages,
-            temperature=0.7,
-            max_tokens=2000,
+            temperature=0.5,  # Reduced from 0.7 for faster response
+            max_tokens=1200,  # Reduced from 2000 for speed
         )
         return res.choices[0].message.content
     except Exception as e:
@@ -70,7 +67,7 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call Claude Opus 4.5 with vision support"""
+    """Call Claude Opus 4.5 with vision support - OPTIMIZED"""
     try:
         content = []
         
@@ -78,12 +75,10 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
         if attachments:
             for att in attachments:
                 if att.get("type", "").startswith("image/"):
-                    # Extract base64 data
                     base64_data = att.get("base64", "")
                     if base64_data.startswith("data:"):
                         base64_data = base64_data.split(",", 1)[1]
                     
-                    # Determine media type
                     media_type = att.get("type", "image/jpeg")
                     
                     content.append({
@@ -101,7 +96,7 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
         res = await asyncio.to_thread(
             anthropic_client.messages.create,
             model="claude-opus-4-5-20251101",
-            max_tokens=2000,
+            max_tokens=1200,  # Reduced from 2000 for speed
             messages=[
                 {"role": "user", "content": content}
             ],
@@ -117,14 +112,14 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call DeepSeek (text-only, no vision)"""
+    """Call DeepSeek (text-only, no vision) - OPTIMIZED"""
     if not deepseek_client:
         return "DeepSeek Error: Client not initialized"
     
     try:
-        system_instruction = "You are a helpful AI assistant. Always respond in English."
+        system_instruction = "You are a helpful AI assistant. Always respond in English. Be concise and to the point."
         
-        # DeepSeek doesn't support vision, inform user if images attached
+        # DeepSeek doesn't support vision
         if attachments and any(att.get("type", "").startswith("image/") for att in attachments):
             return "DeepSeek Note: This model doesn't support image analysis. Response is text-only based on your question."
         
@@ -135,6 +130,8 @@ async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": prompt}
             ],
+            max_tokens=1200,  # Added limit for speed
+            temperature=0.5,  # Optimized for speed
         )
         return res.choices[0].message.content
     except Exception as e:
@@ -152,18 +149,9 @@ async def _generate_blind_verdict(
     has_images: bool = False
 ) -> str:
     """
-    Generate professional verdict with scoring and synthesis
-    
-    Args:
-        prompt: Original user question
-        results: Dict with 'gpt', 'claude', 'deepseek' responses
-        has_images: Whether image analysis was involved
-    
-    Returns:
-        Clean, professional verdict with scores and synthesis
+    Generate professional verdict with scoring and synthesis - OPTIMIZED
     """
     try:
-        # Build vision context if applicable
         vision_context = ""
         if has_images:
             vision_context = """
@@ -219,7 +207,7 @@ Response C: [Score]/10
 
 RECOMMENDED ANSWER
 
-[Provide the synthesized, enhanced answer here. This should be comprehensive, well-structured, and represent the best possible response by combining insights from all three models plus your own additions. Make this 200-400 words.]
+[Provide the synthesized, enhanced answer here. This should be comprehensive, well-structured, and represent the best possible response by combining insights from all three models plus your own additions. Make this 200-300 words.]
 
 Be objective, fair, and evidence-based in your evaluation."""
 
@@ -228,12 +216,11 @@ Be objective, fair, and evidence-based in your evaluation."""
             model="gpt-4o",
             messages=[{"role": "user", "content": blind_prompt}],
             temperature=0.3,
-            max_tokens=1200,
+            max_tokens=1000,  # Reduced from 1200 for speed
         )
         
         verdict_text = res.choices[0].message.content.strip()
         
-        # Add vision capabilities note if images were involved
         if has_images:
             vision_note = """
 
@@ -243,7 +230,6 @@ MODEL CAPABILITIES NOTE
 - DeepSeek: Text-only (no vision) ✗"""
             verdict_text = verdict_text + "\n" + vision_note
         
-        # Add footer
         footer = """
 
 ───────────────────────────────────────────────────────────────
@@ -257,7 +243,6 @@ This verdict was generated by an independent AI judge that did not know which mo
         import traceback
         traceback.print_exc()
         
-        # Fallback verdict on error
         fallback = f"""EVALUATION SUMMARY
 
 Response A: N/A
@@ -282,33 +267,25 @@ This verdict was generated by an independent AI judge that did not know which mo
 
 
 # ------------------------------------------------------------
-# Main Triplet Runner
+# Main Triplet Runner - OPTIMIZED
 # ------------------------------------------------------------
 async def run_triplet(prompt: str, attachments: Optional[List] = None) -> dict:
     """
     Run the same prompt across GPT-4o, Claude Opus, and DeepSeek
-    With vision support for GPT and Claude
-    
-    Args:
-        prompt: User's question/prompt
-        attachments: Optional list of file attachments (images, PDFs)
-        
-    Returns:
-        Dict with individual model responses and blind jury verdict
+    OPTIMIZED for speed with reduced token limits and temperature
     """
     print(f"\n{'═' * 60}")
-    print(f"🔀 TRIPLET REQUEST")
+    print(f"🔀 TRIPLET REQUEST (OPTIMIZED)")
     print(f"{'═' * 60}")
     print(f"Prompt: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
     
-    # Check for image attachments
     has_images = False
     if attachments:
         has_images = any(att.get("type", "").startswith("image/") for att in attachments)
         print(f"📎 Attachments: {len(attachments)} files")
         print(f"🖼️  Images: {'Yes' if has_images else 'No'}")
     
-    # ✅ Run all three models in parallel with attachments
+    # ✅ Run all three models in parallel (ALREADY OPTIMIZED)
     gpt_res, claude_res, deepseek_res = await asyncio.gather(
         _get_gpt(prompt, attachments),
         _get_claude(prompt, attachments),
@@ -326,7 +303,7 @@ async def run_triplet(prompt: str, attachments: Optional[List] = None) -> dict:
     print(f"   Claude: {'✅' if not claude_res.startswith('Claude Error:') else '❌'} ({len(claude_res)} chars)")
     print(f"   DeepSeek: {'✅' if not deepseek_res.startswith('DeepSeek Error:') else '❌'} ({len(deepseek_res)} chars)")
     
-    # ✅ Generate professional verdict with scoring and synthesis
+    # ✅ Generate verdict
     verdict = await _generate_blind_verdict(prompt, results, has_images=has_images)
     results["verdict"] = verdict
     
