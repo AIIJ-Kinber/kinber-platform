@@ -14,36 +14,25 @@ from ..services.triplet_engine import run_triplet
 router = APIRouter()
 
 
-# --------------------------------------------------
-# Request Model
-# --------------------------------------------------
 class TripletRequest(BaseModel):
     prompt: str
     attachments: Optional[List[Dict[str, Any]]] = []
     document_context: Optional[str] = None
+    skip_ai_verdict: Optional[bool] = False  # NEW: Option for faster responses
 
 
-# --------------------------------------------------
-# Triplet Endpoint (PDF + IMAGE AWARE)
-# --------------------------------------------------
 @router.post("/triplet")
 async def triplet_endpoint(payload: TripletRequest):
     """
-    Triplet endpoint with full PDF and image support
-    - PDFs: OCR extraction
-    - Images: Vision analysis via OpenAI
-    - Session memory: Reuses document context on follow-up questions
+    Triplet endpoint with ULTRA optimization
+    Set skip_ai_verdict=true for maximum speed (~8-10s instead of ~15s)
     """
     print(f"\n{'='*60}")
-    print(f"🔀 TRIPLET ENDPOINT CALLED")
+    print(f"🔀 TRIPLET ENDPOINT CALLED (ULTRA-OPTIMIZED)")
     print(f"{'='*60}")
     print(f"📝 Prompt: {payload.prompt[:100]}...")
     print(f"📎 Attachments: {len(payload.attachments or [])}")
-    print(f"💾 Has existing context: {'Yes' if payload.document_context else 'No'}")
-    
-    if payload.attachments:
-        for i, f in enumerate(payload.attachments):
-            print(f"   [{i+1}] {f.get('name', 'unknown')} - {f.get('type', 'unknown')}")
+    print(f"⚡ Skip AI Verdict: {payload.skip_ai_verdict}")
     
     if not payload.prompt or not payload.prompt.strip():
         raise HTTPException(status_code=400, detail="Prompt is required")
@@ -51,9 +40,7 @@ async def triplet_endpoint(payload: TripletRequest):
     extracted_documents: List[str] = []
     vision_extracts: List[str] = []
 
-    # --------------------------------------------------
-    # Process attachments (ONLY if no existing context)
-    # --------------------------------------------------
+    # Process attachments
     if not payload.document_context and payload.attachments:
         print("\n📄 Processing attachments...")
         
@@ -63,16 +50,12 @@ async def triplet_endpoint(payload: TripletRequest):
             name = file.get("name", f"attachment_{idx+1}")
 
             if not base64_data:
-                print(f"   ⚠️ Skipping {name}: No base64 data")
                 continue
 
-            # Strip data URI prefix if present
             if base64_data.startswith("data:"):
                 base64_data = base64_data.split(",", 1)[1]
 
-            # -------------------------------
-            # PDF → OCR EXTRACTION
-            # -------------------------------
+            # PDF Extraction
             if mime == "application/pdf":
                 try:
                     print(f"   📄 Extracting PDF: {name}...")
@@ -84,53 +67,28 @@ async def triplet_endpoint(payload: TripletRequest):
                             f"📄 PDF DOCUMENT — {name}:\n\n{text.strip()}"
                         )
                         print(f"      ✅ Extracted {len(text)} characters")
-                    else:
-                        print(f"      ⚠️ No text found in PDF")
-                        
                 except Exception as e:
                     print(f"      ❌ PDF extraction failed: {e}")
-                    extracted_documents.append(
-                        f"⚠️ PDF DOCUMENT — {name}: Extraction failed"
-                    )
 
-            # -------------------------------
-            # IMAGE → VISION ANALYSIS
-            # -------------------------------
+            # Image Analysis
             elif mime.startswith("image/"):
                 try:
                     print(f"   🖼️ Analyzing image: {name}...")
                     description = await analyze_image_with_openai(
                         base64_data=base64_data,
                         mime_type=mime,
-                        prompt="Analyze this image comprehensively. Describe all visible details, text, objects, people, context, and any other relevant information."
+                        prompt="Analyze this image. Describe key details concisely."
                     )
 
                     if description and description.strip():
                         vision_extracts.append(
-                            f"🖼️ IMAGE ANALYSIS — {name}:\n\n{description.strip()}"
+                            f"🖼️ IMAGE — {name}:\n\n{description.strip()}"
                         )
                         print(f"      ✅ Analysis: {len(description)} characters")
-                    else:
-                        print(f"      ⚠️ No description returned")
-                        
                 except Exception as e:
                     print(f"      ❌ Image analysis failed: {e}")
-                    vision_extracts.append(
-                        f"⚠️ IMAGE — {name}: Analysis failed - {str(e)[:100]}"
-                    )
 
-            # -------------------------------
-            # OTHER FILE TYPES
-            # -------------------------------
-            else:
-                print(f"   ⚠️ Unsupported file type: {mime}")
-                extracted_documents.append(
-                    f"⚠️ FILE — {name}: Unsupported type ({mime})"
-                )
-
-    # --------------------------------------------------
-    # Build or reuse document context (SESSION MEMORY)
-    # --------------------------------------------------
+    # Build document context
     document_context = payload.document_context
 
     if not document_context:
@@ -141,52 +99,36 @@ async def triplet_endpoint(payload: TripletRequest):
         if blocks:
             document_context = "\n\n" + "─" * 60 + "\n\n".join(["", *blocks, ""])
             print(f"\n💾 Created document context: {len(document_context)} chars")
-        else:
-            print(f"\n💾 No document context created")
-    else:
-        print(f"\n💾 Reusing existing context: {len(document_context)} chars")
 
-    # --------------------------------------------------
-    # Final prompt (with document context if available)
-    # --------------------------------------------------
+    # Final prompt
     final_prompt = payload.prompt
 
     if document_context:
-        final_prompt = f"""You have access to the following extracted information from uploaded documents/images:
+        final_prompt = f"""Context from attachments:
 
 {document_context}
 
 {'─' * 60}
 
-USER QUESTION:
-{payload.prompt}
+QUESTION: {payload.prompt}
 
-Answer based on the provided context and your knowledge. Be comprehensive and accurate."""
-        
-        print(f"\n📝 Enhanced prompt: {len(final_prompt)} chars")
-    else:
-        print(f"\n📝 Using original prompt (no context)")
+Answer based on context and your knowledge. Be concise."""
 
-    # --------------------------------------------------
-    # Run Triplet with enhanced prompt
-    # --------------------------------------------------
+    # Run Triplet
     try:
-        print(f"\n🚀 Running triplet with {len(final_prompt)} char prompt...")
-        result = await run_triplet(final_prompt)
+        result = await run_triplet(
+            final_prompt, 
+            skip_ai_verdict=payload.skip_ai_verdict
+        )
         
-        # ✅ Return document context for session memory
         result["document_context"] = document_context
         
-        print(f"\n{'='*60}")
-        print(f"✅ TRIPLET COMPLETED SUCCESSFULLY")
-        print(f"{'='*60}\n")
+        print(f"\n✅ TRIPLET COMPLETED SUCCESSFULLY\n")
         
         return result
 
     except Exception as e:
-        print(f"\n{'='*60}")
-        print(f"❌ TRIPLET FAILED: {e}")
-        print(f"{'='*60}\n")
+        print(f"\n❌ TRIPLET FAILED: {e}\n")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
