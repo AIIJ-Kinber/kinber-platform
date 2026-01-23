@@ -18,14 +18,13 @@ class TripletRequest(BaseModel):
     prompt: str
     attachments: Optional[List[Dict[str, Any]]] = []
     document_context: Optional[str] = None
-    skip_ai_verdict: Optional[bool] = False  # NEW: Option for faster responses
+    skip_ai_verdict: Optional[bool] = False
 
 
 @router.post("/triplet")
 async def triplet_endpoint(payload: TripletRequest):
     """
     Triplet endpoint with ULTRA optimization
-    Set skip_ai_verdict=true for maximum speed (~8-10s instead of ~15s)
     """
     print(f"\n{'='*60}")
     print(f"🔀 TRIPLET ENDPOINT CALLED (ULTRA-OPTIMIZED)")
@@ -50,6 +49,7 @@ async def triplet_endpoint(payload: TripletRequest):
             name = file.get("name", f"attachment_{idx+1}")
 
             if not base64_data:
+                print(f"   ⚠️ Skipping {name}: No base64 data")
                 continue
 
             if base64_data.startswith("data:"):
@@ -67,8 +67,13 @@ async def triplet_endpoint(payload: TripletRequest):
                             f"📄 PDF DOCUMENT — {name}:\n\n{text.strip()}"
                         )
                         print(f"      ✅ Extracted {len(text)} characters")
+                    else:
+                        print(f"      ⚠️ No text found in PDF")
                 except Exception as e:
                     print(f"      ❌ PDF extraction failed: {e}")
+                    extracted_documents.append(
+                        f"⚠️ PDF DOCUMENT — {name}: Extraction failed"
+                    )
 
             # Image Analysis
             elif mime.startswith("image/"):
@@ -85,8 +90,15 @@ async def triplet_endpoint(payload: TripletRequest):
                             f"🖼️ IMAGE — {name}:\n\n{description.strip()}"
                         )
                         print(f"      ✅ Analysis: {len(description)} characters")
+                    else:
+                        print(f"      ⚠️ No description returned")
                 except Exception as e:
                     print(f"      ❌ Image analysis failed: {e}")
+                    vision_extracts.append(
+                        f"⚠️ IMAGE — {name}: Analysis failed - {str(e)[:100]}"
+                    )
+            else:
+                print(f"   ⚠️ Unsupported file type: {mime}")
 
     # Build document context
     document_context = payload.document_context
@@ -99,36 +111,54 @@ async def triplet_endpoint(payload: TripletRequest):
         if blocks:
             document_context = "\n\n" + "─" * 60 + "\n\n".join(["", *blocks, ""])
             print(f"\n💾 Created document context: {len(document_context)} chars")
+        else:
+            print(f"\n💾 No document context created")
+    else:
+        print(f"\n💾 Reusing existing context: {len(document_context)} chars")
 
-    # Final prompt
+    # Final prompt with context if available
     final_prompt = payload.prompt
 
     if document_context:
-        final_prompt = f"""Context from attachments:
+        final_prompt = f"""You have access to the following extracted information:
 
 {document_context}
 
 {'─' * 60}
 
-QUESTION: {payload.prompt}
+USER QUESTION:
+{payload.prompt}
 
-Answer based on context and your knowledge. Be concise."""
+Answer based on the provided context and your knowledge. Be concise and accurate."""
+        
+        print(f"\n📝 Enhanced prompt: {len(final_prompt)} chars")
+    else:
+        print(f"\n📝 Using original prompt (no context)")
 
-    # Run Triplet
+    # Run Triplet with attachments and skip_ai_verdict option
     try:
+        print(f"\n🚀 Running triplet...")
+        
+        # ✅ FIX: Pass attachments to run_triplet
         result = await run_triplet(
-            final_prompt, 
+            prompt=final_prompt,
+            attachments=payload.attachments,  # ✅ ADDED: Pass attachments
             skip_ai_verdict=payload.skip_ai_verdict
         )
         
+        # Return with document context for session memory
         result["document_context"] = document_context
         
-        print(f"\n✅ TRIPLET COMPLETED SUCCESSFULLY\n")
+        print(f"\n{'='*60}")
+        print(f"✅ TRIPLET COMPLETED SUCCESSFULLY")
+        print(f"{'='*60}\n")
         
         return result
 
     except Exception as e:
-        print(f"\n❌ TRIPLET FAILED: {e}\n")
+        print(f"\n{'='*60}")
+        print(f"❌ TRIPLET FAILED: {e}")
+        print(f"{'='*60}\n")
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
