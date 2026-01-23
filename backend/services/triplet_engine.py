@@ -23,10 +23,10 @@ except Exception as e:
 
 
 # ------------------------------------------------------------
-# ULTRA-OPTIMIZED Model calls
+# MAXIMUM SPEED Model calls
 # ------------------------------------------------------------
 async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call OpenAI GPT-4o-mini - ULTRA OPTIMIZED"""
+    """Call OpenAI GPT-4o-mini - MAXIMUM SPEED"""
     try:
         messages = []
         content = []
@@ -46,7 +46,7 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
                         "type": "image_url",
                         "image_url": {
                             "url": f"data:{att['type']};base64,{base64_data}",
-                            "detail": "low"  # Changed from "high" to "low" for speed
+                            "detail": "low"
                         }
                     })
         
@@ -54,10 +54,10 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
         
         res = await asyncio.to_thread(
             openai_client.chat.completions.create,
-            model="gpt-4o-mini",  # Changed from gpt-4o to mini for speed
+            model="gpt-4o-mini",
             messages=messages,
-            temperature=0.3,  # Reduced from 0.5
-            max_tokens=800,  # Reduced from 1200
+            temperature=0.2,  # Further reduced from 0.3
+            max_tokens=500,   # Reduced from 800 - AGGRESSIVE
         )
         return res.choices[0].message.content
     except Exception as e:
@@ -67,7 +67,7 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call Claude Sonnet 4.5 - ULTRA OPTIMIZED"""
+    """Call Claude Sonnet 4.5 - MAXIMUM SPEED"""
     try:
         content = []
         
@@ -95,9 +95,9 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
         
         res = await asyncio.to_thread(
             anthropic_client.messages.create,
-            model="claude-sonnet-4-5-20250929",  # Changed from Opus to Sonnet for speed
-            max_tokens=800,  # Reduced from 1200
-            temperature=0.3,  # Added for consistency
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=500,   # Reduced from 800 - AGGRESSIVE
+            temperature=0.2,  # Further reduced
             messages=[
                 {"role": "user", "content": content}
             ],
@@ -113,12 +113,12 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call DeepSeek - ULTRA OPTIMIZED"""
+    """Call DeepSeek - MAXIMUM SPEED"""
     if not deepseek_client:
         return "DeepSeek Error: Client not initialized"
     
     try:
-        system_instruction = "You are a helpful AI assistant. Be concise."
+        system_instruction = "You are a helpful AI assistant. Be very concise."
         
         # DeepSeek doesn't support vision
         if attachments and any(att.get("type", "").startswith("image/") for att in attachments):
@@ -131,8 +131,8 @@ async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
                 {"role": "system", "content": system_instruction},
                 {"role": "user", "content": prompt}
             ],
-            max_tokens=800,  # Reduced from 1200
-            temperature=0.3,  # Reduced from 0.5
+            max_tokens=500,   # Reduced from 800 - AGGRESSIVE
+            temperature=0.2,  # Further reduced
         )
         return res.choices[0].message.content
     except Exception as e:
@@ -142,7 +142,7 @@ async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 # ------------------------------------------------------------
-# ULTRA-OPTIMIZED Verdict Generator
+# MAXIMUM SPEED Verdict Generator
 # ------------------------------------------------------------
 async def _generate_blind_verdict(
     prompt: str, 
@@ -150,92 +150,67 @@ async def _generate_blind_verdict(
     has_images: bool = False
 ) -> str:
     """
-    Generate professional verdict - ULTRA OPTIMIZED
+    Generate professional verdict - MAXIMUM SPEED
     """
     try:
         vision_context = ""
         if has_images:
-            vision_context = """
+            vision_context = "\nCONTEXT: Image analysis. A/B have vision, C is text-only."
 
-CONTEXT: Image analysis involved.
-- Response A and B: Full vision support
-- Response C: Text-only (no vision)"""
+        # Ultra-concise prompt for maximum speed
+        blind_prompt = f"""Evaluate 3 AI responses. Be brief.
 
-        # Simplified, more concise prompt for faster verdict
-        blind_prompt = f"""You are an AI evaluation judge. Analyze three responses concisely.
+QUESTION: {prompt}
 
-USER QUESTION: {prompt}
-
-RESPONSE A: {results.get('gpt', 'N/A')}
-RESPONSE B: {results.get('claude', 'N/A')}
-RESPONSE C: {results.get('deepseek', 'N/A')}
+A: {results.get('gpt', 'N/A')}
+B: {results.get('claude', 'N/A')}
+C: {results.get('deepseek', 'N/A')}
 {vision_context}
-
-Provide:
-1. Score each response /10 (accuracy, completeness, clarity, relevance)
-2. Synthesize the best answer combining insights from all three
 
 FORMAT:
 
 EVALUATION SUMMARY
 
-Response A: [Score]/10
-[2 sentences - strengths/weaknesses]
+Response A: [X]/10
+[1-2 sentences]
 
-Response B: [Score]/10
-[2 sentences - strengths/weaknesses]
+Response B: [X]/10
+[1-2 sentences]
 
-Response C: [Score]/10
-[2 sentences - strengths/weaknesses]
+Response C: [X]/10
+[1-2 sentences]
 
 RECOMMENDED ANSWER
 
-[Synthesized answer combining best insights, 150-250 words]
-
-Be objective and concise."""
+[100-150 word synthesis combining best insights]"""
 
         res = await asyncio.to_thread(
             openai_client.chat.completions.create,
-            model="gpt-4o-mini",  # Changed from gpt-4o for speed
+            model="gpt-4o-mini",
             messages=[{"role": "user", "content": blind_prompt}],
-            temperature=0.2,  # Reduced from 0.3
-            max_tokens=700,  # Reduced from 1000
+            temperature=0.1,  # Further reduced from 0.2
+            max_tokens=500,   # Reduced from 700 - AGGRESSIVE
         )
         
         verdict_text = res.choices[0].message.content.strip()
         
         if has_images:
-            vision_note = """
-
-MODEL CAPABILITIES
-- GPT-4o-mini: Vision support ✓
-- Claude Sonnet 4.5: Vision support ✓
-- DeepSeek: Text-only ✗"""
-            verdict_text = verdict_text + "\n" + vision_note
+            vision_note = "\n\nMODEL CAPABILITIES\n• GPT-4o-mini: Vision ✓\n• Claude Sonnet: Vision ✓\n• DeepSeek: Text-only ✗"
+            verdict_text = verdict_text + vision_note
         
-        footer = """
-
-───────────────────────────────────────────────────────────────
-This verdict was generated by an independent AI judge that did not know which model produced which response."""
+        footer = "\n\n───────────────────────────────────────────────────────────────\nThis verdict was generated by an independent AI judge that did not know which model produced which response."
         
-        final_verdict = verdict_text + "\n" + footer
-        
-        return final_verdict
+        return verdict_text + footer
         
     except Exception as e:
         import traceback
         traceback.print_exc()
         
-        fallback = f"""EVALUATION SUMMARY
+        return f"""EVALUATION SUMMARY
 
 Response A: N/A
-Verdict generation error. Review responses above.
-
 Response B: N/A
-Verdict generation error. Review responses above.
-
 Response C: N/A
-Verdict generation error. Review responses above.
 
 RECOMMENDED ANSWER
 
@@ -243,31 +218,27 @@ Error: {str(e)}
 
 ───────────────────────────────────────────────────────────────
 This verdict was generated by an independent AI judge that did not know which model produced which response."""
-        
-        return fallback
 
 
 # ------------------------------------------------------------
-# Main Triplet Runner - ULTRA OPTIMIZED
+# Main Triplet Runner - MAXIMUM SPEED
 # ------------------------------------------------------------
 async def run_triplet(
     prompt: str, 
     attachments: Optional[List] = None, 
-    skip_ai_verdict: bool = False  # ✅ ADDED: skip_ai_verdict parameter
+    skip_ai_verdict: bool = False
 ) -> dict:
     """
-    Run prompt across 3 models - ULTRA OPTIMIZED
+    Run prompt across 3 models - MAXIMUM SPEED
     
-    Args:
-        prompt: User's question
-        attachments: Optional attachments
-        skip_ai_verdict: If True, skip AI verdict generation for maximum speed
-    
-    Returns:
-        Dict with model responses and verdict
+    Optimizations:
+    - Reduced max_tokens to 500 (from 800)
+    - Temperature 0.2 (from 0.3)
+    - Verdict max_tokens to 500 (from 700)
+    - Ultra-concise prompts
     """
     print(f"\n{'═' * 60}")
-    print(f"🔀 TRIPLET REQUEST (ULTRA-OPTIMIZED)")
+    print(f"🔀 TRIPLET REQUEST (MAXIMUM SPEED)")
     print(f"{'═' * 60}")
     print(f"Prompt: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
     print(f"Skip AI Verdict: {skip_ai_verdict}")
@@ -279,8 +250,8 @@ async def run_triplet(
         print(f"🖼️  Images: {'Yes' if has_images else 'No'}")
     
     # ✅ Run all three models in parallel
-    print(f"⚡ Starting parallel model execution...")
-    start_time = asyncio.get_event_loop().time()
+    print(f"⚡ Starting parallel execution...")
+    start = asyncio.get_event_loop().time()
     
     gpt_res, claude_res, deepseek_res = await asyncio.gather(
         _get_gpt(prompt, attachments),
@@ -288,8 +259,8 @@ async def run_triplet(
         _get_deepseek(prompt, attachments),
     )
     
-    models_time = asyncio.get_event_loop().time() - start_time
-    print(f"⚡ Models completed in {models_time:.2f}s")
+    models_time = asyncio.get_event_loop().time() - start
+    print(f"⚡ Models: {models_time:.1f}s")
     
     results = {
         "gpt": gpt_res,
@@ -297,43 +268,42 @@ async def run_triplet(
         "deepseek": deepseek_res,
     }
     
-    print(f"\n📊 Model Response Status:")
-    print(f"   GPT-4o-mini: {'✅' if not gpt_res.startswith('GPT Error:') else '❌'} ({len(gpt_res)} chars)")
-    print(f"   Claude Sonnet: {'✅' if not claude_res.startswith('Claude Error:') else '❌'} ({len(claude_res)} chars)")
-    print(f"   DeepSeek: {'✅' if not deepseek_res.startswith('DeepSeek Error:') else '❌'} ({len(deepseek_res)} chars)")
+    print(f"📊 GPT: {'✅' if not gpt_res.startswith('GPT Error:') else '❌'} ({len(gpt_res)}ch)")
+    print(f"📊 Claude: {'✅' if not claude_res.startswith('Claude Error:') else '❌'} ({len(claude_res)}ch)")
+    print(f"📊 DeepSeek: {'✅' if not deepseek_res.startswith('DeepSeek Error:') else '❌'} ({len(deepseek_res)}ch)")
     
-    # ✅ Generate verdict (or skip if requested)
+    # ✅ Generate verdict
     if skip_ai_verdict:
-        print(f"⚡ Skipping AI verdict (fast mode)")
+        print(f"⚡ Skipping verdict")
         verdict = f"""EVALUATION SUMMARY
 
-All three models have provided their responses above. Review them to determine which answer best suits your needs.
+All three models provided responses above.
 
-Response A (GPT-4o-mini): {len(gpt_res)} characters
-Response B (Claude Sonnet 4.5): {len(claude_res)} characters  
-Response C (DeepSeek): {len(deepseek_res)} characters
+Response A (GPT-4o-mini): {len(gpt_res)} chars
+Response B (Claude Sonnet): {len(claude_res)} chars  
+Response C (DeepSeek): {len(deepseek_res)} chars
 
 RECOMMENDED ANSWER
 
-Compare the responses above. Each model offers unique insights:
-- Response A: Fast, efficient, good for general queries
-- Response B: Balanced speed and depth
-- Response C: Alternative perspective, text-only
+Compare responses above. Each offers unique insights:
+- Response A: Fast and efficient
+- Response B: Balanced depth
+- Response C: Alternative view
 
 ───────────────────────────────────────────────────────────────
-Compare all three responses to find the answer that best matches your needs."""
+Compare all three to find the best answer for your needs."""
     else:
-        print(f"⚡ Generating AI verdict...")
+        print(f"⚡ Generating verdict...")
         verdict_start = asyncio.get_event_loop().time()
         verdict = await _generate_blind_verdict(prompt, results, has_images=has_images)
         verdict_time = asyncio.get_event_loop().time() - verdict_start
-        print(f"⚡ Verdict completed in {verdict_time:.2f}s")
+        print(f"⚡ Verdict: {verdict_time:.1f}s")
     
     results["verdict"] = verdict
     
-    total_time = asyncio.get_event_loop().time() - start_time
+    total = asyncio.get_event_loop().time() - start
     print(f"{'═' * 60}")
-    print(f"✅ TRIPLET COMPLETED in {total_time:.2f}s")
+    print(f"✅ TOTAL: {total:.1f}s")
     print(f"{'═' * 60}\n")
     
     return results
