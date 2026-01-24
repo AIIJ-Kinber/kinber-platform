@@ -158,6 +158,10 @@ async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
             temperature=0.3,
         )
         
+        response = res.choices[0].message.content
+        
+        # ✅ No disclaimer added - clean response only
+        return response
         
     except Exception as e:
         import traceback
