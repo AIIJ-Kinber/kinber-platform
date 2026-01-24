@@ -129,50 +129,47 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call DeepSeek with neutral instructions"""
+    """Call DeepSeek - Text-only model (Vision not supported via API)"""
     if not deepseek_client:
         return "DeepSeek Error: Client not initialized"
     
     try:
-        content = []
-        
-        # Add images if any (DeepSeek now supports vision!)
+        # Check if images are present
+        has_images = False
         if attachments:
-            for att in attachments:
-                if att.get("type", "").startswith("image/"):
-                    base64_data = att.get("base64", "")
-                    if base64_data.startswith("data:"):
-                        base64_data = base64_data.split(",", 1)[1]
-                    
-                    content.append({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{att['type']};base64,{base64_data}"
-                        }
-                    })
+            has_images = any(att.get("type", "").startswith("image/") for att in attachments)
         
-        # Add text prompt
-        content.append({"type": "text", "text": prompt})
+        # Build the prompt
+        if has_images:
+            # Inform the model it should answer based on text description
+            enhanced_prompt = f"{prompt}\n\n(Note: Respond based on the text question. I cannot analyze images.)"
+        else:
+            enhanced_prompt = prompt
         
-        # Neutral system instruction (same as others)
+        # Make API call (text-only)
         res = await asyncio.to_thread(
             deepseek_client.chat.completions.create,
             model="deepseek-chat",
             messages=[
                 {"role": "system", "content": NEUTRAL_INSTRUCTION},
-                {"role": "user", "content": content}
+                {"role": "user", "content": enhanced_prompt}
             ],
-            max_tokens=600,   # Increased for more complete answers
-            temperature=0.3,  # Slightly increased for better responses
+            max_tokens=600,
+            temperature=0.3,
         )
         
-        return res.choices[0].message.content
+        response = res.choices[0].message.content
+        
+        # Add vision disclaimer if images were present
+        if has_images:
+            response += "\n\n───────────────────────────────────────────────────────────────\n⚠️ **Vision Limitation**: DeepSeek does not support image analysis via API. Response is based on text only."
+        
+        return response
         
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"DeepSeek Error: {str(e)}"
-
 
 # ------------------------------------------------------------
 # Unbiased Verdict Generator
