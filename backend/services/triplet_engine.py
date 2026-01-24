@@ -158,13 +158,6 @@ async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
             temperature=0.3,
         )
         
-        response = res.choices[0].message.content
-        
-        # Add vision disclaimer if images were present
-        if has_images:
-            response += "\n\n───────────────────────────────────────────────────────────────\n⚠️ **Vision Limitation**: DeepSeek does not support image analysis via API. Response is based on text only."
-        
-        return response
         
     except Exception as e:
         import traceback
