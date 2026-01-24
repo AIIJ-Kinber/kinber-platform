@@ -133,17 +133,10 @@ async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
         if attachments:
             has_images = any(att.get("type", "").startswith("image/") for att in attachments)
         
-        # If images are present, clearly state limitation upfront
-        if has_images:
-            return """⚠️ **Image Analysis Not Supported**
-
-This model (DeepSeek) does not have vision capabilities and cannot analyze images. 
-
-If you have a text-based question related to the image, please describe what you'd like to know, and I'll provide a concise, direct answer based on the text description."""
-        
-        # For text-only queries, provide concise answers
+        # System instruction for concise answers
         system_instruction = "You are a concise AI assistant. Provide direct, no-fluff answers with key points. Focus on clarity and brevity."
         
+        # Make API call with text prompt
         res = await asyncio.to_thread(
             deepseek_client.chat.completions.create,
             model="deepseek-chat",
@@ -155,13 +148,18 @@ If you have a text-based question related to the image, please describe what you
             temperature=0.2,
         )
         
-        return res.choices[0].message.content
+        response = res.choices[0].message.content
+        
+        # If images were attached, add a disclaimer at the end
+        if has_images:
+            response += """\n\n⚠️ **Note**: This model does not have vision capabilities. The response above is based on the text prompt only, not the image content."""
+        
+        return response
         
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"DeepSeek Error: {str(e)}"
-
 
 # ------------------------------------------------------------
 # Verdict Generator
