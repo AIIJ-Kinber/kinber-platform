@@ -113,17 +113,19 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call DeepSeek - MAXIMUM SPEED"""
+    """Call DeepSeek - MAXIMUM SPEED - Text-only model"""
     if not deepseek_client:
         return "DeepSeek Error: Client not initialized"
     
     try:
-        system_instruction = "You are a helpful AI assistant. Be very concise."
+        system_instruction = "You are a helpful AI assistant. Be very concise and direct."
         
-        # DeepSeek doesn't support vision
-        if attachments and any(att.get("type", "").startswith("image/") for att in attachments):
-            return "DeepSeek Note: This model doesn't support image analysis."
+        # Check if images are present
+        has_images = False
+        if attachments:
+            has_images = any(att.get("type", "").startswith("image/") for att in attachments)
         
+        # Make API call (DeepSeek will respond to text part)
         res = await asyncio.to_thread(
             deepseek_client.chat.completions.create,
             model="deepseek-chat",
@@ -134,13 +136,20 @@ async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
             max_tokens=500,
             temperature=0.2,
         )
-        return res.choices[0].message.content
+        
+        response = res.choices[0].message.content
+        
+        # Add vision limitation note only if images were attached
+        if has_images:
+            response += "\n\n⚠️ Note: This model doesn't support image analysis. Response is based on text only."
+        
+        return response
+        
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"DeepSeek Error: {str(e)}"
-
-
+    
 # ------------------------------------------------------------
 # MAXIMUM SPEED Verdict Generator
 # ------------------------------------------------------------
