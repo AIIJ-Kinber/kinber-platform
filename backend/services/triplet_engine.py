@@ -23,16 +23,12 @@ except Exception as e:
 
 
 # ------------------------------------------------------------
-# MAXIMUM SPEED Model calls
+# Model calls with DISTINCT PERSONALITIES
 # ------------------------------------------------------------
 async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call OpenAI GPT-4o-mini - MAXIMUM SPEED"""
+    """Call OpenAI GPT-4o-mini - Focus on practical, actionable insights"""
     try:
-        messages = []
         content = []
-        
-        # Add text prompt
-        content.append({"type": "text", "text": prompt})
         
         # Add images if any
         if attachments:
@@ -50,7 +46,20 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
                         }
                     })
         
-        messages.append({"role": "user", "content": content})
+        # Add text prompt
+        content.append({"type": "text", "text": prompt})
+        
+        # System message for practical insights
+        messages = [
+            {
+                "role": "system",
+                "content": "You are a practical AI assistant. Focus on actionable insights and real-world applications. Be concise and direct."
+            },
+            {
+                "role": "user",
+                "content": content
+            }
+        ]
         
         res = await asyncio.to_thread(
             openai_client.chat.completions.create,
@@ -67,7 +76,7 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call Claude Sonnet 4.5 - MAXIMUM SPEED"""
+    """Call Claude Sonnet 4.5 - Focus on nuanced analysis"""
     try:
         content = []
         
@@ -90,8 +99,9 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
                         }
                     })
         
-        # Add text prompt
-        content.append({"type": "text", "text": prompt})
+        # Enhanced prompt for nuanced analysis
+        enhanced_prompt = f"{prompt}\n\nProvide a nuanced, thoughtful analysis considering different perspectives."
+        content.append({"type": "text", "text": enhanced_prompt})
         
         res = await asyncio.to_thread(
             anthropic_client.messages.create,
@@ -113,19 +123,27 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call DeepSeek - MAXIMUM SPEED - Text-only model"""
+    """Call DeepSeek - Focus on concise, direct answers (TEXT-ONLY MODEL)"""
     if not deepseek_client:
         return "DeepSeek Error: Client not initialized"
     
     try:
-        system_instruction = "You are a helpful AI assistant. Be very concise and direct."
-        
         # Check if images are present
         has_images = False
         if attachments:
             has_images = any(att.get("type", "").startswith("image/") for att in attachments)
         
-        # Make API call (DeepSeek will respond to text part)
+        # If images are present, clearly state limitation upfront
+        if has_images:
+            return """⚠️ **Image Analysis Not Supported**
+
+This model (DeepSeek) does not have vision capabilities and cannot analyze images. 
+
+If you have a text-based question related to the image, please describe what you'd like to know, and I'll provide a concise, direct answer based on the text description."""
+        
+        # For text-only queries, provide concise answers
+        system_instruction = "You are a concise AI assistant. Provide direct, no-fluff answers with key points. Focus on clarity and brevity."
+        
         res = await asyncio.to_thread(
             deepseek_client.chat.completions.create,
             model="deepseek-chat",
@@ -137,21 +155,16 @@ async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
             temperature=0.2,
         )
         
-        response = res.choices[0].message.content
-        
-        # Add vision limitation note only if images were attached
-        if has_images:
-            response += "\n\n⚠️ Note: This model doesn't support image analysis. Response is based on text only."
-        
-        return response
+        return res.choices[0].message.content
         
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"DeepSeek Error: {str(e)}"
-    
+
+
 # ------------------------------------------------------------
-# MAXIMUM SPEED Verdict Generator
+# Verdict Generator
 # ------------------------------------------------------------
 async def _generate_blind_verdict(
     prompt: str, 
@@ -159,21 +172,20 @@ async def _generate_blind_verdict(
     has_images: bool = False
 ) -> str:
     """
-    Generate professional verdict - MAXIMUM SPEED
+    Generate professional verdict
     """
     try:
         vision_context = ""
         if has_images:
-            vision_context = "\nCONTEXT: Image analysis. A/B have vision, C is text-only."
+            vision_context = "\nCONTEXT: Image analysis task. A and B have vision, C (DeepSeek) does not support images."
 
-        # Ultra-concise prompt for maximum speed
-        blind_prompt = f"""Evaluate 3 AI responses. Be brief.
+        blind_prompt = f"""Evaluate 3 AI responses. Be brief and fair.
 
 QUESTION: {prompt}
 
-A: {results.get('gpt', 'N/A')}
-B: {results.get('claude', 'N/A')}
-C: {results.get('deepseek', 'N/A')}
+RESPONSE A (Practical Focus): {results.get('gpt', 'N/A')}
+RESPONSE B (Nuanced Analysis): {results.get('claude', 'N/A')}
+RESPONSE C (Concise/Direct): {results.get('deepseek', 'N/A')}
 {vision_context}
 
 FORMAT:
@@ -181,17 +193,17 @@ FORMAT:
 EVALUATION SUMMARY
 
 Response A: [X]/10
-[1-2 sentences]
+[1-2 sentences on strengths/weaknesses]
 
 Response B: [X]/10
-[1-2 sentences]
+[1-2 sentences on strengths/weaknesses]
 
 Response C: [X]/10
-[1-2 sentences]
+[1-2 sentences on strengths/weaknesses]
 
 RECOMMENDED ANSWER
 
-[100-150 word synthesis combining best insights]"""
+[100-150 word synthesis combining best insights from all three responses]"""
 
         res = await asyncio.to_thread(
             openai_client.chat.completions.create,
@@ -204,7 +216,7 @@ RECOMMENDED ANSWER
         verdict_text = res.choices[0].message.content.strip()
         
         if has_images:
-            vision_note = "\n\nMODEL CAPABILITIES\n• GPT-4o-mini: Vision ✓\n• Claude Sonnet: Vision ✓\n• DeepSeek: Text-only ✗"
+            vision_note = "\n\nMODEL CAPABILITIES\n• GPT-4o-mini: Vision support ✓\n• Claude Sonnet: Vision support ✓\n• DeepSeek: Text-only (No vision) ✗"
             verdict_text = verdict_text + vision_note
         
         footer = "\n\n───────────────────────────────────────────────────────────────\nThis verdict was generated by an independent AI judge that did not know which model produced which response."
@@ -238,10 +250,10 @@ async def run_triplet(
     skip_ai_verdict: bool = False
 ) -> dict:
     """
-    Run prompt across 3 models - MAXIMUM SPEED (Non-streaming)
+    Run prompt across 3 models with distinct personalities
     """
     print(f"\n{'═' * 60}")
-    print(f"🔀 TRIPLET REQUEST (MAXIMUM SPEED)")
+    print(f"🔀 TRIPLET REQUEST")
     print(f"{'═' * 60}")
     print(f"Prompt: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
     print(f"Skip AI Verdict: {skip_ai_verdict}")
@@ -282,16 +294,16 @@ async def run_triplet(
 
 All three models provided responses above.
 
-Response A (GPT-4o-mini): {len(gpt_res)} chars
-Response B (Claude Sonnet): {len(claude_res)} chars  
-Response C (DeepSeek): {len(deepseek_res)} chars
+Response A (Practical): {len(gpt_res)} chars
+Response B (Nuanced): {len(claude_res)} chars  
+Response C (Concise): {len(deepseek_res)} chars
 
 RECOMMENDED ANSWER
 
 Compare responses above. Each offers unique insights:
-- Response A: Fast and efficient
-- Response B: Balanced depth
-- Response C: Alternative view
+- Response A: Practical, actionable focus
+- Response B: Nuanced, thoughtful analysis
+- Response C: Concise, direct answers
 
 ───────────────────────────────────────────────────────────────
 Compare all three to find the best answer for your needs."""
@@ -313,7 +325,7 @@ Compare all three to find the best answer for your needs."""
 
 
 # ------------------------------------------------------------
-# Streaming Triplet Runner - YIELDS RESULTS AS THEY COMPLETE
+# Streaming Triplet Runner
 # ------------------------------------------------------------
 async def run_triplet_streaming(
     prompt: str, 
@@ -322,9 +334,6 @@ async def run_triplet_streaming(
 ):
     """
     Stream Triplet results as they complete
-    
-    Yields:
-        Dict chunks with model responses and verdict
     """
     print(f"\n{'═' * 60}")
     print(f"🔀⚡ STREAMING TRIPLET")
