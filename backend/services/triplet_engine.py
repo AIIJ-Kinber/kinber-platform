@@ -23,10 +23,16 @@ except Exception as e:
 
 
 # ------------------------------------------------------------
-# Model calls with DISTINCT PERSONALITIES
+# NEUTRAL SYSTEM INSTRUCTION (Same for all models)
+# ------------------------------------------------------------
+NEUTRAL_INSTRUCTION = "You are a helpful AI assistant. Provide nuanced, concise, and direct answers. Focus on accuracy and clarity."
+
+
+# ------------------------------------------------------------
+# Model calls with IDENTICAL INSTRUCTIONS (Unbiased)
 # ------------------------------------------------------------
 async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call OpenAI GPT-4o-mini - Focus on practical, actionable insights"""
+    """Call OpenAI GPT-4o-mini with neutral instructions"""
     try:
         content = []
         
@@ -42,18 +48,18 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
                         "type": "image_url",
                         "image_url": {
                             "url": f"data:{att['type']};base64,{base64_data}",
-                            "detail": "low"
+                            "detail": "high"  # Changed back to high for better quality
                         }
                     })
         
         # Add text prompt
         content.append({"type": "text", "text": prompt})
         
-        # System message for practical insights
+        # Neutral system message (same for all)
         messages = [
             {
                 "role": "system",
-                "content": "You are a practical AI assistant. Focus on actionable insights and real-world applications. Be concise and direct."
+                "content": NEUTRAL_INSTRUCTION
             },
             {
                 "role": "user",
@@ -65,8 +71,8 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
             openai_client.chat.completions.create,
             model="gpt-4o-mini",
             messages=messages,
-            temperature=0.2,
-            max_tokens=500,
+            temperature=0.3,  # Slightly increased for better responses
+            max_tokens=600,   # Increased for more complete answers
         )
         return res.choices[0].message.content
     except Exception as e:
@@ -76,7 +82,7 @@ async def _get_gpt(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call Claude Sonnet 4.5 - Focus on nuanced analysis"""
+    """Call Claude Sonnet 4.5 with neutral instructions"""
     try:
         content = []
         
@@ -99,15 +105,15 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
                         }
                     })
         
-        # Enhanced prompt for nuanced analysis
-        enhanced_prompt = f"{prompt}\n\nProvide a nuanced, thoughtful analysis considering different perspectives."
-        content.append({"type": "text", "text": enhanced_prompt})
+        # Add text prompt with neutral instruction
+        prompt_with_instruction = f"{prompt}\n\n{NEUTRAL_INSTRUCTION}"
+        content.append({"type": "text", "text": prompt_with_instruction})
         
         res = await asyncio.to_thread(
             anthropic_client.messages.create,
             model="claude-sonnet-4-5-20250929",
-            max_tokens=500,
-            temperature=0.2,
+            max_tokens=600,   # Increased for more complete answers
+            temperature=0.3,  # Slightly increased for better responses
             messages=[
                 {"role": "user", "content": content}
             ],
@@ -123,46 +129,53 @@ async def _get_claude(prompt: str, attachments: Optional[List] = None) -> str:
 
 
 async def _get_deepseek(prompt: str, attachments: Optional[List] = None) -> str:
-    """Call DeepSeek - Focus on concise, direct answers (TEXT-ONLY MODEL)"""
+    """Call DeepSeek with neutral instructions"""
     if not deepseek_client:
         return "DeepSeek Error: Client not initialized"
     
     try:
-        # Check if images are present
-        has_images = False
+        content = []
+        
+        # Add images if any (DeepSeek now supports vision!)
         if attachments:
-            has_images = any(att.get("type", "").startswith("image/") for att in attachments)
+            for att in attachments:
+                if att.get("type", "").startswith("image/"):
+                    base64_data = att.get("base64", "")
+                    if base64_data.startswith("data:"):
+                        base64_data = base64_data.split(",", 1)[1]
+                    
+                    content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{att['type']};base64,{base64_data}"
+                        }
+                    })
         
-        # System instruction for concise answers
-        system_instruction = "You are a concise AI assistant. Provide direct, no-fluff answers with key points. Focus on clarity and brevity."
+        # Add text prompt
+        content.append({"type": "text", "text": prompt})
         
-        # Make API call with text prompt
+        # Neutral system instruction (same as others)
         res = await asyncio.to_thread(
             deepseek_client.chat.completions.create,
             model="deepseek-chat",
             messages=[
-                {"role": "system", "content": system_instruction},
-                {"role": "user", "content": prompt}
+                {"role": "system", "content": NEUTRAL_INSTRUCTION},
+                {"role": "user", "content": content}
             ],
-            max_tokens=500,
-            temperature=0.2,
+            max_tokens=600,   # Increased for more complete answers
+            temperature=0.3,  # Slightly increased for better responses
         )
         
-        response = res.choices[0].message.content
-        
-        # If images were attached, add a disclaimer at the end
-        if has_images:
-            response += """\n\n⚠️ **Note**: This model does not have vision capabilities. The response above is based on the text prompt only, not the image content."""
-        
-        return response
+        return res.choices[0].message.content
         
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"DeepSeek Error: {str(e)}"
 
+
 # ------------------------------------------------------------
-# Verdict Generator
+# Unbiased Verdict Generator
 # ------------------------------------------------------------
 async def _generate_blind_verdict(
     prompt: str, 
@@ -170,51 +183,63 @@ async def _generate_blind_verdict(
     has_images: bool = False
 ) -> str:
     """
-    Generate professional verdict
+    Generate professional unbiased verdict
+    All models received identical instructions for fair comparison
     """
     try:
         vision_context = ""
         if has_images:
-            vision_context = "\nCONTEXT: Image analysis task. A and B have vision, C (DeepSeek) does not support images."
+            vision_context = "\nCONTEXT: All three models have vision capabilities and received identical instructions."
 
-        blind_prompt = f"""Evaluate 3 AI responses. Be brief and fair.
+        blind_prompt = f"""You are an impartial AI judge evaluating three responses to the same question. All models received identical instructions, ensuring a fair comparison.
 
 QUESTION: {prompt}
 
-RESPONSE A (Practical Focus): {results.get('gpt', 'N/A')}
-RESPONSE B (Nuanced Analysis): {results.get('claude', 'N/A')}
-RESPONSE C (Concise/Direct): {results.get('deepseek', 'N/A')}
+RESPONSE A: {results.get('gpt', 'N/A')}
+
+RESPONSE B: {results.get('claude', 'N/A')}
+
+RESPONSE C: {results.get('deepseek', 'N/A')}
 {vision_context}
+
+Evaluate based on:
+- Accuracy and correctness
+- Completeness and depth
+- Clarity and structure
+- Directness and conciseness
+- Overall helpfulness
 
 FORMAT:
 
 EVALUATION SUMMARY
 
 Response A: [X]/10
-[1-2 sentences on strengths/weaknesses]
+[2 sentences explaining strengths and weaknesses]
 
 Response B: [X]/10
-[1-2 sentences on strengths/weaknesses]
+[2 sentences explaining strengths and weaknesses]
 
 Response C: [X]/10
-[1-2 sentences on strengths/weaknesses]
+[2 sentences explaining strengths and weaknesses]
 
 RECOMMENDED ANSWER
 
-[100-150 word synthesis combining best insights from all three responses]"""
+[Synthesize the best elements from all three responses into one superior answer. 150-200 words.]
+
+Be objective, fair, and evidence-based."""
 
         res = await asyncio.to_thread(
             openai_client.chat.completions.create,
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": blind_prompt}],
-            temperature=0.1,
-            max_tokens=500,
+            temperature=0.2,
+            max_tokens=700,
         )
         
         verdict_text = res.choices[0].message.content.strip()
         
         if has_images:
-            vision_note = "\n\nMODEL CAPABILITIES\n• GPT-4o-mini: Vision support ✓\n• Claude Sonnet: Vision support ✓\n• DeepSeek: Text-only (No vision) ✗"
+            vision_note = "\n\nMODEL CAPABILITIES\n• GPT-4o-mini: Vision support ✓\n• Claude Sonnet 4.5: Vision support ✓\n• DeepSeek: Vision support ✓"
             verdict_text = verdict_text + vision_note
         
         footer = "\n\n───────────────────────────────────────────────────────────────\nThis verdict was generated by an independent AI judge that did not know which model produced which response."
@@ -240,7 +265,7 @@ This verdict was generated by an independent AI judge that did not know which mo
 
 
 # ------------------------------------------------------------
-# Main Triplet Runner - NON-STREAMING
+# Main Triplet Runner
 # ------------------------------------------------------------
 async def run_triplet(
     prompt: str, 
@@ -248,10 +273,10 @@ async def run_triplet(
     skip_ai_verdict: bool = False
 ) -> dict:
     """
-    Run prompt across 3 models with distinct personalities
+    Run prompt across 3 models with IDENTICAL INSTRUCTIONS for fair comparison
     """
     print(f"\n{'═' * 60}")
-    print(f"🔀 TRIPLET REQUEST")
+    print(f"🔀 TRIPLET REQUEST (UNBIASED)")
     print(f"{'═' * 60}")
     print(f"Prompt: {prompt[:100]}{'...' if len(prompt) > 100 else ''}")
     print(f"Skip AI Verdict: {skip_ai_verdict}")
@@ -262,8 +287,8 @@ async def run_triplet(
         print(f"📎 Attachments: {len(attachments)} files")
         print(f"🖼️  Images: {'Yes' if has_images else 'No'}")
     
-    # ✅ Run all three models in parallel
-    print(f"⚡ Starting parallel execution...")
+    # ✅ Run all three models in parallel with identical instructions
+    print(f"⚡ Starting parallel execution (all models: {NEUTRAL_INSTRUCTION})...")
     start = asyncio.get_event_loop().time()
     
     gpt_res, claude_res, deepseek_res = await asyncio.gather(
@@ -285,28 +310,25 @@ async def run_triplet(
     print(f"📊 Claude: {'✅' if not claude_res.startswith('Claude Error:') else '❌'} ({len(claude_res)}ch)")
     print(f"📊 DeepSeek: {'✅' if not deepseek_res.startswith('DeepSeek Error:') else '❌'} ({len(deepseek_res)}ch)")
     
-    # ✅ Generate verdict
+    # ✅ Generate unbiased verdict
     if skip_ai_verdict:
         print(f"⚡ Skipping verdict")
         verdict = f"""EVALUATION SUMMARY
 
-All three models provided responses above.
+All three models received identical instructions for fair comparison.
 
-Response A (Practical): {len(gpt_res)} chars
-Response B (Nuanced): {len(claude_res)} chars  
-Response C (Concise): {len(deepseek_res)} chars
+Response A (GPT-4o-mini): {len(gpt_res)} chars
+Response B (Claude Sonnet 4.5): {len(claude_res)} chars  
+Response C (DeepSeek): {len(deepseek_res)} chars
 
 RECOMMENDED ANSWER
 
-Compare responses above. Each offers unique insights:
-- Response A: Practical, actionable focus
-- Response B: Nuanced, thoughtful analysis
-- Response C: Concise, direct answers
+Compare the three responses above to find the answer that best matches your needs. All models used the same instructions: "{NEUTRAL_INSTRUCTION}"
 
 ───────────────────────────────────────────────────────────────
-Compare all three to find the best answer for your needs."""
+Fair comparison ensured through identical instructions."""
     else:
-        print(f"⚡ Generating verdict...")
+        print(f"⚡ Generating unbiased verdict...")
         verdict_start = asyncio.get_event_loop().time()
         verdict = await _generate_blind_verdict(prompt, results, has_images=has_images)
         verdict_time = asyncio.get_event_loop().time() - verdict_start
@@ -331,10 +353,10 @@ async def run_triplet_streaming(
     skip_ai_verdict: bool = False
 ):
     """
-    Stream Triplet results as they complete
+    Stream Triplet results as they complete (with identical instructions)
     """
     print(f"\n{'═' * 60}")
-    print(f"🔀⚡ STREAMING TRIPLET")
+    print(f"🔀⚡ STREAMING TRIPLET (UNBIASED)")
     print(f"{'═' * 60}")
     
     has_images = False
@@ -343,7 +365,7 @@ async def run_triplet_streaming(
     
     start = asyncio.get_event_loop().time()
     
-    # Create tasks for all 3 models
+    # Create tasks for all 3 models with identical instructions
     tasks = {
         "gpt": asyncio.create_task(_get_gpt(prompt, attachments)),
         "claude": asyncio.create_task(_get_claude(prompt, attachments)),
@@ -379,7 +401,7 @@ async def run_triplet_streaming(
     
     # Generate verdict after all models complete
     if not skip_ai_verdict:
-        print(f"⚡ Generating verdict...")
+        print(f"⚡ Generating unbiased verdict...")
         verdict_start = asyncio.get_event_loop().time()
         verdict = await _generate_blind_verdict(prompt, results, has_images=has_images)
         verdict_time = asyncio.get_event_loop().time() - verdict_start
