@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
@@ -7,7 +6,7 @@ import Image from 'next/image';
 import { createClient } from '@/lib/supabase/client';
 import MessageInput from '@/_components/thread/chat-input/message-input';
 
-const TRIPLET_API_URL = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/triplet/stream`; // ✅ Added /stream
+const TRIPLET_API_URL = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/triplet/stream`;
 
 export default function TripletClient() {
   const router = useRouter();
@@ -63,6 +62,16 @@ export default function TripletClient() {
         return;
       }
 
+      // ✅ FIX: Decide whether to use cached context or process new attachments
+      const hasNewAttachments = attachments.length > 0;
+      const shouldProcessAttachments = hasNewAttachments || !documentContext;
+
+      // ✅ FIX: Clear old context if new attachments are present
+      if (hasNewAttachments) {
+        console.log('🔄 New attachments detected - clearing old context');
+        setDocumentContext(null);
+      }
+
       const res = await fetch(TRIPLET_API_URL, {
         method: 'POST',
         headers: {
@@ -72,9 +81,11 @@ export default function TripletClient() {
         },
         body: JSON.stringify({
           prompt: text,
-          attachments: documentContext ? [] : attachments,
-          document_context: documentContext,
-          skip_ai_verdict: false, // Set to true for faster responses (~8s)
+          // ✅ FIX: Send attachments if new ones exist OR no context cached
+          attachments: shouldProcessAttachments ? attachments : [],
+          // ✅ FIX: Only reuse context if NO new attachments
+          document_context: hasNewAttachments ? null : documentContext,
+          skip_ai_verdict: false,
         }),
       });
 
@@ -133,8 +144,9 @@ export default function TripletClient() {
                 console.log('✅ Verdict received');
               }
 
-              // Handle document context
-              if (data.document_context && !documentContext) {
+              // ✅ FIX: Update context only if new attachments were processed
+              if (data.document_context && hasNewAttachments) {
+                console.log('💾 Storing new document context');
                 setDocumentContext(data.document_context);
               }
 
@@ -154,8 +166,9 @@ export default function TripletClient() {
         }
       }
 
-      // Clear attachments after first request
-      if (attachments.length > 0) {
+      // ✅ FIX: Clear attachments after processing
+      if (hasNewAttachments) {
+        console.log('🧹 Clearing attachments after processing');
         setAttachments([]);
       }
 
@@ -270,6 +283,16 @@ export default function TripletClient() {
                 {completedModels.has('deepseek') && '✓ DeepSeek'}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ NEW: Document context indicator */}
+      {documentContext && attachments.length === 0 && (
+        <div className="fixed bottom-24 left-8 bg-blue-900/80 backdrop-blur-sm border border-blue-700 rounded-lg px-4 py-2 shadow-lg">
+          <div className="flex items-center gap-2 text-sm text-blue-100">
+            <span>📄</span>
+            <span>Document context active (follow-up mode)</span>
           </div>
         </div>
       )}
