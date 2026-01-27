@@ -210,7 +210,7 @@ export default function TripletClient() {
           </p>
         ) : (
           <p className="text-gray-500 text-[18px] leading-relaxed text-center flex-1 flex items-center justify-center">
-            Waiting for response...
+            Waiting for user input...
           </p>
         )}
       </div>
